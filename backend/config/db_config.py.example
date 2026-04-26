@@ -1,0 +1,10 @@
+# backend/config/db_config.py.example
+# RENOMEIE ESTE ARQUIVO PARA db_config.py E COLOQUE SUAS SENHAS LOCAIS
+
+class Config:
+    DB_TYPE = "mysql"
+    DB_HOST = "localhost"
+    DB_USER = "root"
+    DB_PASSWORD = "SUA_SENHA_AQUI"
+    DB_NAME = "codecraft_vistoria"
+    DB_PORT = "3306"

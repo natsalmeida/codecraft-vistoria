@@ -1,0 +1,7 @@
+# Ignorar configurações sensíveis
+backend/config/db_config.py
+
+# Ignorar o ambiente virtual e arquivos temporários do Python
+venv/
+__pycache__/
+.env
