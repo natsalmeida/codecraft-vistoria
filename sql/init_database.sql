@@ -53,8 +53,8 @@ CREATE TABLE Item_Checklist (
 
 -- População de Base
 INSERT INTO Usuario (nome, perfil, login, senha) VALUES 
-('Nathalie Soares', 'Gestor', 'nathalie.gestor', 'hash123'),
-('Marciel Gomes', 'Vistoriador', 'marciel.vist', 'hash456');
+('Nathalie Soares', 'Gestor', 'nathalie.almeida@tre-to.jus.br', 'hash123'),
+('Marciel Gomes', 'Vistoriador', 'marciel.rodrigues@tre-to.jus.br', 'hash456');
 
 INSERT INTO Equipamento (nome_equipamento) VALUES ('Estepe'), ('Macaco'), ('Chave de Roda');
 

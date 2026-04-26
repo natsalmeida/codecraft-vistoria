@@ -1,6 +1,7 @@
 # backend/app.py
 
 from flask import Flask, jsonify
+from flask_cors import CORS
 import mysql.connector
 from config.db_config import Config
 
@@ -11,6 +12,7 @@ from routes.vistoria_routes import vistoria_bp
 
 # Inicializa o aplicativo Flask
 app = Flask(__name__)
+CORS(app)
 
 # REGISTRA AS ROTAS NO APLICATIVO
 app.register_blueprint(auth_bp)
