@@ -137,3 +137,61 @@ textarea.fiw{resize:vertical;min-height:80px}
 .plate-group-body{padding:0}
 @media(max-width:480px){.fr,.ckg,.pdf-g{grid-template-columns:1fr}.ctn,.ctn-w{padding:0 12px 110px}.card,.card-w{padding:16px}}
 @media(min-width:768px){.stg4{grid-template-columns:repeat(4,1fr)!important}}
+
+.checklist-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr; /* Duas colunas */
+    gap: 12px;
+    margin: 20px 0;
+}
+
+.chk-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 14px;
+    background: #f8fafc;
+    border: 2px solid #e2e8f0;
+    border-radius: var(--r);
+    cursor: pointer;
+    transition: var(--tr);
+    user-select: none;
+}
+
+.chk-item:hover {
+    border-color: var(--blue-l);
+    background: #f1f5f9;
+}
+
+.chk-box {
+    width: 24px;
+    height: 24px;
+    border-radius: 6px;
+    border: 2px solid #cbd5e1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 900;
+    font-size: 14px;
+    color: transparent;
+    transition: var(--tr);
+    flex-shrink: 0;
+}
+
+.chk-item .chk-box.checked {
+    background: var(--grn);
+    border-color: var(--grn);
+    color: #fff;
+}
+
+.chk-item span {
+    font-size: 14px;
+    font-weight: 700;
+    color: #475569;
+}
+
+@media (max-width: 400px) {
+    .checklist-grid {
+        grid-template-columns: 1fr;
+    }
+}
