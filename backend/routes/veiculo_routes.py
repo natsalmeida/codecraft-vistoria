@@ -80,12 +80,13 @@ def cadastrar_veiculo():
     try:
         cursor = conn.cursor()
         comando_sql = """
-            INSERT INTO Veiculo (placa, marca, modelo, ano, condutor, rota, orgao_origem)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO Veiculo (placa, marca, modelo, ano, condutor, rota, orgao_origem, combustivel, tipo)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         valores = (
             dados['placa'], dados['marca'], dados['modelo'], dados['ano'],
-            dados.get('condutor', None), dados.get('rota', None), dados.get('orgao_origem', None)
+            dados.get('condutor', None), dados.get('rota', None), dados.get('orgao_origem', None),
+            dados.get('combustivel', None), dados.get('tipo', None)
         )
         cursor.execute(comando_sql, valores)
         conn.commit() # Salva a alteração no banco
@@ -110,9 +111,17 @@ def atualizar_veiculo(placa):
     
     try:
         cursor = conn.cursor()
-        # Atualiza condutor e rota como exemplo (pode expandir depois)
-        comando_sql = "UPDATE Veiculo SET condutor = %s, rota = %s WHERE placa = %s"
-        valores = (dados.get('condutor'), dados.get('rota'), placa)
+        # Atualiza também marca, modelo, ano, orgao_origem, combustivel e tipo
+        comando_sql = """
+            UPDATE Veiculo 
+            SET marca = %s, modelo = %s, ano = %s, orgao_origem = %s, combustivel = %s, tipo = %s 
+            WHERE placa = %s
+        """
+        valores = (
+            dados.get('marca'), dados.get('modelo'), dados.get('ano'), 
+            dados.get('orgao_origem'), dados.get('combustivel'), dados.get('tipo'), 
+            placa
+        )
         
         cursor.execute(comando_sql, valores)
         conn.commit()

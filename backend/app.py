@@ -9,6 +9,8 @@ from config.db_config import Config
 from routes.auth_routes import auth_bp
 from routes.veiculo_routes import veiculo_bp
 from routes.vistoria_routes import vistoria_bp
+from routes.equipamento_routes import equipamento_bp
+from routes.usuario_routes import usuario_bp
 
 # Inicializa o aplicativo Flask
 app = Flask(__name__)
@@ -18,6 +20,8 @@ CORS(app)
 app.register_blueprint(auth_bp)
 app.register_blueprint(veiculo_bp)
 app.register_blueprint(vistoria_bp)
+app.register_blueprint(equipamento_bp)
+app.register_blueprint(usuario_bp)
 
 def get_db_connection():
     """Função auxiliar para conectar ao banco de dados MySQL"""

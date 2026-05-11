@@ -1,4 +1,11 @@
--- Tabela de Atores do Sistema
+-- ==========================================
+-- CodeCraft Vistoria - Script de Inicialização 
+-- ==========================================
+
+CREATE DATABASE IF NOT EXISTS codecraft_vistoria;
+USE codecraft_vistoria;
+
+-- 1. Tabela de Atores do Sistema
 CREATE TABLE Usuario (
     id_usuario INT AUTO_INCREMENT PRIMARY KEY,
     nome VARCHAR(100) NOT NULL,
@@ -7,7 +14,7 @@ CREATE TABLE Usuario (
     senha VARCHAR(255) NOT NULL
 );
 
--- Tabela da Frota do Cartório
+-- 2. Tabela da Frota do Cartório
 CREATE TABLE Veiculo (
     placa VARCHAR(10) PRIMARY KEY,
     marca VARCHAR(50) NOT NULL,
@@ -15,10 +22,18 @@ CREATE TABLE Veiculo (
     ano INT,
     condutor VARCHAR(100),
     rota VARCHAR(100),
-    orgao_origem VARCHAR(100)
+    orgao_origem VARCHAR(100),
+    combustivel VARCHAR(30) DEFAULT 'Flex',
+    tipo VARCHAR(30) DEFAULT 'requisitado'
 );
 
--- Tabela de Transações 
+-- 3. Tabela de Equipamentos e Acessórios
+CREATE TABLE Equipamento (
+    id_equipamento INT AUTO_INCREMENT PRIMARY KEY,
+    nome_equipamento VARCHAR(50) NOT NULL
+);
+
+-- 4. Tabela Principal de Transações (Vistorias)
 CREATE TABLE Vistoria (
     id_vistoria INT AUTO_INCREMENT PRIMARY KEY,
     placa_veiculo VARCHAR(10) NOT NULL,
@@ -35,48 +50,68 @@ CREATE TABLE Vistoria (
     url_fotos_json TEXT,
     assinatura_fiscal BLOB,
     assinatura_motorista BLOB,
+    condutor VARCHAR(100),
+    rota VARCHAR(100),
+    id_usuario_fechamento INT,
     FOREIGN KEY (placa_veiculo) REFERENCES Veiculo(placa),
-    FOREIGN KEY (id_usuario_vistoriador) REFERENCES Usuario(id_usuario)
+    FOREIGN KEY (id_usuario_vistoriador) REFERENCES Usuario(id_usuario),
+    FOREIGN KEY (id_usuario_fechamento) REFERENCES Usuario(id_usuario)
 );
 
--- Tabela de Itens de Checklist (Normalizada)
+-- 5. Tabela de Itens de Checklist (Relação N:M)
 CREATE TABLE Item_Checklist (
     id_vistoria INT NOT NULL,
     id_equipamento INT NOT NULL,
     presente BOOLEAN NOT NULL,
+    quantidade INT DEFAULT 1,
     observacao VARCHAR(255),
     PRIMARY KEY (id_vistoria, id_equipamento),
-    FOREIGN KEY (id_vistoria) REFERENCES Vistoria(id_vistoria),
-    FOREIGN KEY (id_equipamento) REFERENCES Equipamento(id_equipamento)
+    FOREIGN KEY (id_vistoria) REFERENCES Vistoria(id_vistoria) ON DELETE CASCADE,
+    FOREIGN KEY (id_equipamento) REFERENCES Equipamento(id_equipamento) ON DELETE CASCADE
 );
 
+-- ==========================================
+-- População de Base (Inserts Iniciais)
+-- ==========================================
 
--- População de Base
-INSERT INTO Usuario (nome, perfil, login, senha) VALUES 
-('Nathalie Soares', 'Gestor', 'nathalie.almeida@tre-to.jus.br', 'hash123'),
-('Marciel Gomes', 'Vistoriador', 'marciel.rodrigues@tre-to.jus.br', 'hash456');
+-- Inserindo Usuários
+INSERT INTO Usuario (id_usuario, nome, perfil, login, senha) VALUES 
+(1, 'Nathalie Soares', 'Gestor', 'nathalie.almeida@tre-to.jus.br', 'hash123'),
+(2, 'Marciel Gomes', 'Vistoriador', 'marciel.rodrigues@tre-to.jus.br', 'hash456');
 
-INSERT INTO Equipamento (nome_equipamento) VALUES ('Estepe'), ('Macaco'), ('Chave de Roda');
+-- Inserindo Veículos
+INSERT INTO Veiculo (placa, marca, modelo, ano, condutor, rota, orgao_origem, combustivel, tipo) VALUES 
+('ABC1234', 'Renault', 'Sandero', 2026, 'Artur', 'Gato', 'Câmara', 'Gasolina', 'requisitado');
 
-INSERT INTO Veiculo (placa, marca, modelo, ano) VALUES ('QTO1234', 'Fiat', 'Toro', 2022);
+-- Inserindo Equipamentos Padrão
+INSERT INTO Equipamento (id_equipamento, nome_equipamento) VALUES 
+(1, 'Estepe'),
+(2, 'Macaco'),
+(3, 'Chave de Roda'),
+(4, 'Extintor'),
+(5, 'Triângulo'),
+(6, 'Calotas'),
+(7, 'Tapetes'),
+(8, 'Rádio'),
+(9, 'Documentos'),
+(10, 'Travessa Capota'),
+(11, 'Capota'),
+(12, 'Antena'),
+(13, 'Cartão Combustível');
 
--- Registro de uma Vistoria de Saída (Fase 1)
-INSERT INTO Vistoria (placa_veiculo, id_usuario_vistoriador, data_vistoria, hr_saida, hodometro_inicial, combustivel_inicial)
-VALUES ('QTO1234', 2, '2024-05-23', '07:00:00', 15000, 'Full');
-
--- Vinculando Itens de Checklist para a Vistoria ID 1
-INSERT INTO Item_Checklist (id_vistoria, id_equipamento, presente) VALUES (1, 1, TRUE), (1, 2, TRUE), (1, 3, FALSE);
-
-
--- Relatório Consolidado: Saída vs Retorno
+-- Relatório Consolidado Útil para Testes do Gestor
+-- (Pode ser rodado manualmente no Workbench para conferência)
+/*
 SELECT 
+    v.id_vistoria,
     v.placa_veiculo,
+    u1.nome AS vistoriador_saida,
+    u2.nome AS vistoriador_retorno,
     v.hodometro_inicial,
     v.hodometro_final,
     (v.hodometro_final - v.hodometro_inicial) AS km_percorrida,
-    v.combustivel_inicial,
-    v.combustivel_final,
-    u.nome AS vistoriador
+    v.status
 FROM Vistoria v
-JOIN Usuario u ON v.id_usuario_vistoriador = u.id_usuario
-WHERE v.status = 'Fechada';
+LEFT JOIN Usuario u1 ON v.id_usuario_vistoriador = u1.id_usuario
+LEFT JOIN Usuario u2 ON v.id_usuario_fechamento = u2.id_usuario;
+*/

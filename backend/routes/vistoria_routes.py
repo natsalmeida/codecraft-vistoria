@@ -27,30 +27,38 @@ def abrir_vistoria():
         cursor = conn.cursor()
         
         # 1º Passo: Inserir a Vistoria Principal
+        
+        condutor = dados.get('condutor', 'Não informado')
+        rota = dados.get('rota', 'Não informada')
+                
         sql_vistoria = """
             INSERT INTO Vistoria 
-            (placa_veiculo, id_usuario_vistoriador, data_vistoria, hr_saida, hodometro_inicial, combustivel_inicial, status)
-            VALUES (%s, %s, %s, %s, %s, %s, 'Aberta')
+            (placa_veiculo, id_usuario_vistoriador, data_vistoria, hr_saida, hodometro_inicial, combustivel_inicial, condutor, rota, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'Aberta')
         """
+        
         valores_vistoria = (
             dados['placa_veiculo'], dados['id_usuario_vistoriador'], 
             dados['data_vistoria'], dados['hr_saida'], 
-            dados['hodometro_inicial'], dados['combustivel_inicial']
+            dados['hodometro_inicial'], dados['combustivel_inicial'],
+            condutor, rota
         )
-        cursor.execute(sql_vistoria, valores_vistoria)
         
-        # Pega o ID da vistoria que o banco acabou de gerar automaticamente
+        cursor.execute(sql_vistoria, valores_vistoria)
+                
         id_vistoria_gerado = cursor.lastrowid
         
         # 2º Passo: Inserir os Itens do Checklist vinculados a essa vistoria
-        if 'checklist' in dados:
-            sql_checklist = "INSERT INTO Item_Checklist (id_vistoria, id_equipamento, presente) VALUES (%s, %s, %s)"
-            
-            for item in dados['checklist']:
-                valores_item = (id_vistoria_gerado, item['id_equipamento'], item['presente'])
+        if 'checklist' in dados:           
+            sql_checklist = "INSERT INTO Item_Checklist (id_vistoria, id_equipamento, presente, quantidade) VALUES (%s, %s, %s, %s)"
+    
+            for item in dados['checklist']:              
+                quantidade_item = item.get('quantidade', 1)
+        
+                valores_item = (id_vistoria_gerado, item['id_equipamento'], item['presente'], quantidade_item)
+        
                 cursor.execute(sql_checklist, valores_item)
-                
-        # Confirma as duas transações no banco de dados
+        
         conn.commit()
         
         return jsonify({
@@ -69,23 +77,30 @@ def abrir_vistoria():
             conn.close()
 
 # ==========================================
-# 2. FECHAR VISTORIA (Retorno do Veículo) - PUT
+# 3. FECHAR VISTORIA (Saída/Retorno) - PUT
 # ==========================================
 @vistoria_bp.route('/api/vistorias/<int:id_vistoria>/fechar', methods=['PUT'])
 def fechar_vistoria(id_vistoria):
     dados = request.get_json()
     conn = get_db_connection()
-    
+    if conn is None:
+        return jsonify({"erro": "Erro de conexão com o banco"}), 500
+        
     try:
         cursor = conn.cursor()
+ 
         sql_fechar = """
             UPDATE Vistoria 
-            SET hr_retorno = %s, hodometro_final = %s, combustivel_final = %s, avarias = %s, status = 'Fechada'
+            SET hr_retorno = %s, hodometro_final = %s, combustivel_final = %s, 
+                avarias = %s, id_usuario_fechamento = %s, status = 'Fechada'
             WHERE id_vistoria = %s AND status = 'Aberta'
         """
         valores = (
-            dados['hr_retorno'], dados['hodometro_final'], 
-            dados['combustivel_final'], dados.get('avarias', ''), 
+            dados['hr_retorno'], 
+            dados['hodometro_final'], 
+            dados['combustivel_final'], 
+            dados.get('avarias', ''), 
+            dados['id_usuario_fechamento'], 
             id_vistoria
         )
         
@@ -93,9 +108,9 @@ def fechar_vistoria(id_vistoria):
         conn.commit()
         
         if cursor.rowcount > 0:
-            return jsonify({"status": "sucesso", "mensagem": "Vistoria fechada com sucesso!"}), 200
+            return jsonify({"status": "sucesso", "mensagem": "Vistoria fechada!"}), 200
         else:
-            return jsonify({"erro": "Vistoria não encontrada ou já está fechada"}), 404
+            return jsonify({"erro": "Vistoria não encontrada ou já fechada"}), 404
             
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
@@ -103,7 +118,6 @@ def fechar_vistoria(id_vistoria):
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
-
 # ==========================================
 # 3. LISTAR TODAS AS VISTORIAS (Relatório) - GET
 # ==========================================
@@ -111,13 +125,16 @@ def fechar_vistoria(id_vistoria):
 def listar_vistorias():
     conn = get_db_connection()
     try:
-        # Traz um relatório com o nome do vistoriador e os dados da vistoria
         cursor = conn.cursor(dictionary=True)
         sql_relatorio = """
-            SELECT v.id_vistoria, v.placa_veiculo, u.nome AS vistoriador, 
-                   v.data_vistoria, v.status, v.hodometro_inicial, v.hodometro_final
+            SELECT v.id_vistoria, v.placa_veiculo, 
+                   u1.nome AS vistoriador, v.id_usuario_vistoriador,
+                   u2.nome AS vistoriador_fechamento, v.id_usuario_fechamento,
+                   v.data_vistoria, v.status, v.hodometro_inicial, v.hodometro_final,
+                   v.hr_saida, v.combustivel_inicial, v.condutor, v.rota
             FROM Vistoria v
-            JOIN Usuario u ON v.id_usuario_vistoriador = u.id_usuario
+            LEFT JOIN Usuario u1 ON v.id_usuario_vistoriador = u1.id_usuario
+            LEFT JOIN Usuario u2 ON v.id_usuario_fechamento = u2.id_usuario
             ORDER BY v.data_vistoria DESC, v.id_vistoria DESC
         """
         cursor.execute(sql_relatorio)
