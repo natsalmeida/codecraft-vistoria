@@ -52,6 +52,15 @@ function nDate(){return new Date().toISOString().split('T')[0]}
 function nTime(){return new Date().toTimeString().slice(0,5)}
 function updYear(){qa('.yv').forEach(e=>e.textContent=S.year)}
 function persist(){DB.set('inspections',DB.get('inspections'));}
+function formatarDataTela(dStr){
+  if(!dStr) return '—';
+  let d = dStr;
+  if(d.length > 10 && (d.includes('GMT') || d.includes('T'))) {
+    try { d = new Date(d).toISOString().split('T')[0]; } catch(e){}
+  }
+  const p = d.split('-');
+  return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : d;
+}
 
 function stInfo(s){
   const m={rascunho:{bg:'linear-gradient(135deg,#92400e,#f59e0b)',ic:'✏️',lb:'Rascunho',cl:'bdg-gld'},
@@ -285,8 +294,8 @@ function renderG(){
     '<div class="card card-st"><div class="sv" style="color:var(--txt2)">MySQL</div><div class="sl">Integrado</div></div>'+
     '</div>'+
     '<h3 style="color:var(--gold);font-size:14px;font-weight:800;margin-bottom:10px">ÚLTIMAS VISTORIAS PROCESSADAS</h3>'+
-    (sent.length===0?'<div class="card" style="text-align:center;color:var(--txt3);padding:30px">Nenhuma vistoria recebida em '+S.year+'</div>':
-    sent.slice(0,8).map(i=>'<div class="card ii" onclick="viewInsp(\''+i.id+'\')"><div class="iic" style="background:linear-gradient(135deg,#065f46,var(--grn))">📄</div><div style="flex:1;min-width:0"><div style="font-weight:700;color:var(--gold);font-size:14px">'+i.placa+' — '+(i.marca_modelo||'')+'</div><div style="font-size:12px;color:var(--txt2)">Por: '+(i.inspector_name||'—')+' · '+(i.saida_data||'')+'</div></div><span class="bdg bdg-pur">Sincronizado</span></div>').join(''))+
+    (sent.length===0?'<div class="card" style="text-align:center;color:var(--txt3);padding:30px">Nenhuma vistoria recebida em '+S.year+'</div>':    
+    sent.slice(0,8).map(i=>'<div class="card ii" onclick="viewInsp(\''+i.id+'\')"><div class="iic" style="background:linear-gradient(135deg,#065f46,var(--grn))">📄</div><div style="flex:1;min-width:0"><div style="font-weight:700;color:var(--gold);font-size:14px">'+i.placa+' — '+(i.marca_modelo||'')+'</div><div style="font-size:12px;color:var(--txt2)">Por: '+(i.inspector_name||'—')+' · '+formatarDataTela(i.saida_data)+'</div></div><span class="bdg bdg-pur">Sincronizado</span></div>').join(''))+
     '</div>';
   }
   else if(S.gTab==='g-insp'){
@@ -391,14 +400,7 @@ function renderG(){
       (items.length === 0 ? '<div style="padding:14px;font-size:12px;color:#f59e0b;font-weight:700">⏳ Veículo na frota, mas ainda não vistoriado.</div>' : 
       items.map(i=>{
           const st=stInfo(i.status);
-          
-          let dataFormatada = i.saida_data || '';
-          if(dataFormatada.length > 10 && dataFormatada.includes('GMT')) {
-              const d = new Date(dataFormatada);
-              dataFormatada = d.toISOString().split('T')[0];
-          }
-
-          return '<div class="card ii" style="margin:0;border-radius:0;border-bottom:1px solid var(--brd)" onclick="viewInsp(\''+i.id+'\')"><div class="iic" style="background:'+st.bg+'">'+st.ic+'</div><div style="flex:1"><div style="font-size:12px;color:var(--txt2)">'+(i.inspector_name||'—')+' · '+dataFormatada+' — 📍 '+(i.itinerario||'Sem rota')+'</div></div><span class="bdg '+st.cl+'">'+st.lb+'</span></div>'
+          return '<div class="card ii" style="margin:0;border-radius:0;border-bottom:1px solid var(--brd)" onclick="viewInsp(\''+i.id+'\')"><div class="iic" style="background:'+st.bg+'">'+st.ic+'</div><div style="flex:1"><div style="font-size:12px;color:var(--txt2)">'+(i.inspector_name||'—')+' · '+formatarDataTela(i.saida_data)+' — 📍 '+(i.itinerario||'Sem rota')+'</div></div><span class="bdg '+st.cl+'">'+st.lb+'</span></div>'
       }).join(''))+
       '</div></div>';
     }).join(''))+'</div>';
@@ -945,9 +947,9 @@ function renderV(){
     '<button class="btn btn-pri btn-lg" onclick="startInsp(\'v1\')" style="margin-bottom:4px">📝  Vistoria 1 — Chegada</button>'+
     '<p style="text-align:center;font-size:11px;color:var(--txt3);margin-bottom:14px">Vistoria do veículo ao chegar</p>'+
     '<button class="btn btn-grn btn-lg" onclick="startV2()" style="margin-bottom:4px">🔄  Vistoria 2 — Saída</button>'+
-    '<p style="text-align:center;font-size:11px;color:var(--txt3);margin-bottom:20px">Vistoria do veículo ao devolver</p>'+
+    '<p style="text-align:center;font-size:11px;color:var(--txt3);margin-bottom:20px">Vistoria do veículo ao devolver</p>'+  
     (drafts.length?'<h3 style="color:#f59e0b;font-size:13px;font-weight:800;margin-bottom:8px">📂 RASCUNHOS SALVOS</h3>'+
-    drafts.map(i=>'<div class="card ii" onclick="resumeDraft(\''+i.id+'\')"><div class="iic" style="background:linear-gradient(135deg,#92400e,#f59e0b)">✏️</div><div style="flex:1"><div style="font-weight:700;color:var(--gold)">'+(i.placa||'Sem placa')+'</div><div style="font-size:12px;color:var(--txt2)">'+(i.saida_data||'')+'</div></div><span class="bdg bdg-gld">Rascunho</span></div>').join(''):'')+
+    drafts.map(i=>'<div class="card ii" onclick="resumeDraft(\''+i.id+'\')"><div class="iic" style="background:linear-gradient(135deg,#92400e,#f59e0b)">✏️</div><div style="flex:1"><div style="font-weight:700;color:var(--gold)">'+(i.placa||'Sem placa')+'</div><div style="font-size:12px;color:var(--txt2)">'+formatarDataTela(i.saida_data)+'</div></div><span class="bdg bdg-gld">Rascunho</span></div>').join(''):'')+
     '</div>';
   }
   else if(S.vTab==='v-hist'){    
@@ -976,17 +978,10 @@ function renderV(){
         '<div class="plate-group-body">' +
           items.map(i => {
             const st = stInfo(i.status);
-                      
-            let dataFormatada = i.saida_data || '';
-            if(dataFormatada.length > 10 && dataFormatada.includes('GMT')) {
-                const d = new Date(dataFormatada);
-                dataFormatada = d.toISOString().split('T')[0];
-            }
-
             return '<div class="card ii" style="margin:0;border-radius:0;border-bottom:1px solid var(--brd)" onclick="viewInsp(\'' + i.id + '\')">' +
               '<div class="iic" style="background:' + st.bg + '">' + st.ic + '</div>' +
               '<div style="flex:1">' +                
-                '<div style="font-size:12px;color:var(--txt2)">' + (i.inspector_name || '—') + ' · ' + dataFormatada + ' às ' + (i.saida_horario || '') + '</div>' +
+                '<div style="font-size:12px;color:var(--txt2)">' + (i.inspector_name || '—') + ' · ' + formatarDataTela(i.saida_data) + ' às ' + (i.saida_horario || '') + '</div>' +
               '</div>' +
               '<span class="bdg ' + st.cl + '">' + st.lb + '</span>' +
             '</div>';
@@ -1015,7 +1010,7 @@ function newFormData(){
     itinerario:'',nome_condutor:'', equipment:{},comentario:'',sem_avarias:true,com_avarias:false,avarias_obs:'',
     saida_data:nDate(),saida_horario:nTime(),saida_hodometro:'',saida_pneus:'',saida_tanque:'',
     retorno_data:'',retorno_horario:'',retorno_hodometro:'',retorno_pneus:'',retorno_tanque:'',
-    assinatura_motorista:'',assinatura_vistoriador:'',photos:[],avaria_photos:[],cloned_from:null, db_id: null};
+    assinatura_motorista:'', assinatura_vistoriador:'',photos:[],photos_saida:[],avaria_photos:[],avaria_photos_saida:[],cloned_from:null, db_id: null};
 }
 
 function startInsp(type){S.formType=type;S.formSec=0;S.form=newFormData();showFormUI();renderForm()}
@@ -1066,6 +1061,9 @@ function cloneInsp(id){
     assinatura_vistoriador: '', 
     inspector_id: S.profile.id_usuario, 
     inspector_name: S.profile.full_name, 
+    photos_saida: [],
+    avaria_photos_saida: [], 
+    cloned_from:orig.id,
     
     cloned_from:orig.id, 
     db_id: orig.db_id
@@ -1232,19 +1230,36 @@ function renderForm(){
 
   // SEÇÃO 3: Avarias
   if(sec===3){
-    h+='<div class="card-w"><h3 style="margin:0 0 16px;border-bottom:3px solid var(--red);padding-bottom:8px">Avarias</h3>'+
-    '<div style="display:flex;gap:12px;margin-bottom:14px"><label class="ob'+(d.sem_avarias?' sel-g':'')+'" style="flex:1;cursor:pointer" onclick="syncForm(); S.form.sem_avarias=true;S.form.com_avarias=false;renderForm()"><input type="radio" name="av" '+(d.sem_avarias?'checked':'')+'> <strong>Sem Avarias</strong></label><label class="ob'+(d.com_avarias?' sel':'')+'" style="flex:1;cursor:pointer" onclick="syncForm(); S.form.sem_avarias=false;S.form.com_avarias=true;renderForm()"><input type="radio" name="av" '+(d.com_avarias?'checked':'')+'> <strong>Com Avarias</strong></label></div>'+
-    (d.com_avarias?'<div class="fg"><label class="fl-d">Descreva as avarias <span class="req">*</span></label><textarea class="fiw" id="f-avobs">'+(d.avarias_obs||'')+'</textarea></div><div class="fg"><label class="fl-d">📸 Fotos das Avarias</label><div class="phg">'+photoThumbs(d.avaria_photos||[],'avp')+'<div class="pha" onclick="trigPhoto(\'avp\')">+</div></div></div>':'')+'</div>';
-  }
+    h+='<div class="card-w"><h3 style="margin:0 0 16px;border-bottom:3px solid var(--red);padding-bottom:8px">Avarias</h3>';
 
+    if(isR && d.cloned_from && d.avaria_photos && d.avaria_photos.length > 0) {
+        h += `<div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:10px; padding:14px; margin-bottom:18px;">
+                <div style="font-weight:800; font-size:13px; color:#991b1b; margin-bottom:10px;">📸 FOTOS DAS AVARIAS DA CHEGADA:</div>
+                <div class="phg">${photoThumbs(d.avaria_photos, 'avp_chk')}</div>
+              </div>`;
+    }
+
+    const phTarget = isR ? d.avaria_photos_saida||[] : d.avaria_photos||[];
+    h+='<div style="display:flex;gap:12px;margin-bottom:14px"><label class="ob'+(d.sem_avarias?' sel-g':'')+'" style="flex:1;cursor:pointer" onclick="syncForm(); S.form.sem_avarias=true;S.form.com_avarias=false;renderForm()"><input type="radio" name="av" '+(d.sem_avarias?'checked':'')+'> <strong>Sem Avarias</strong></label><label class="ob'+(d.com_avarias?' sel':'')+'" style="flex:1;cursor:pointer" onclick="syncForm(); S.form.sem_avarias=false;S.form.com_avarias=true;renderForm()"><input type="radio" name="av" '+(d.com_avarias?'checked':'')+'> <strong>Com Avarias</strong></label></div>'+
+    (d.com_avarias?'<div class="fg"><label class="fl-d">Descreva as avarias <span class="req">*</span></label><textarea class="fiw" id="f-avobs">'+(d.avarias_obs||'')+'</textarea></div><div class="fg"><label class="fl-d">📸 Fotos das Avarias '+(isR?'(Saída)':'')+'</label><div class="phg">'+photoThumbs(phTarget,'avp')+'<div class="pha" onclick="trigPhoto(\'avp\')">+</div></div></div>':'')+'</div>';
+  }
   // SEÇÃO 4: Fotos
   if(sec===4){
-       const pts=[{k:'frente',l:'Frente'},{k:'traseira',l:'Traseira'},{k:'lat_esq',l:'Lateral Esquerda'},{k:'lat_dir',l:'Lateral Direita'},{k:'painel',l:'Painel'}];
-    h+='<div class="card-w"><h3 style="margin:0 0 16px;font-size:16px;font-weight:900;color:#0f172a;border-bottom:3px solid var(--blue);padding-bottom:8px">Registro Fotográfico</h3>'+
-    '<p class="phh" style="margin-bottom:16px;font-size:12px;color:#64748b">📷 Fotos neste campo são <strong>opcionais</strong>. Servem para documentação adicional.</p>'+
-    pts.map(pt=>'<div class="fg"><label class="fl-d">📸 '+pt.l+'</label><div class="phg">'+photoThumbs((d.photos||[]).filter(p=>p.type===pt.k),'ph_'+pt.k)+'<div class="pha" onclick="trigPhoto(\'ph_'+pt.k+'\')">+</div></div></div>').join('')+'</div>';
-  }
+    const pts=[{k:'frente',l:'Frente'},{k:'traseira',l:'Traseira'},{k:'lat_esq',l:'Lateral Esquerda'},{k:'lat_dir',l:'Lateral Direita'},{k:'painel',l:'Painel'}];
+    h+='<div class="card-w"><h3 style="margin:0 0 16px;font-size:16px;font-weight:900;color:#0f172a;border-bottom:3px solid var(--blue);padding-bottom:8px">Registro Fotográfico</h3>';
 
+    // Exibe as fotos da chegada como "Apenas Leitura"
+    if(isR && d.cloned_from && d.photos && d.photos.length > 0) {
+        h += `<div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:10px; padding:14px; margin-bottom:18px;">
+                <div style="font-weight:800; font-size:13px; color:#1e40af; margin-bottom:10px;">📸 FOTOS DA CHEGADA:</div>
+                <div class="phg">${photoThumbs(d.photos, 'ph_chk')}</div>
+              </div>`;
+    }
+
+    const phTarget = isR ? (d.photos_saida||[]) : (d.photos||[]);
+    h+='<p class="phh" style="margin-bottom:16px;font-size:12px;color:#b45309;background:#fffbeb;padding:8px;border-radius:4px;border:1px solid #fde68a">⚠️ <strong>Atenção:</strong> É obrigatório anexar pelo menos 1 foto em cada um dos 5 ângulos abaixo para prosseguir com a '+(isR?'Saída':'Chegada')+'.</p>'+
+    pts.map(pt=>'<div class="fg"><label class="fl-d">📸 '+pt.l+' '+(isR?'(Nova Foto)':'')+' <span class="req">*</span></label><div class="phg">'+photoThumbs(phTarget.filter(p=>p.type==='ph_'+pt.k),'ph_'+pt.k)+'<div class="pha" onclick="trigPhoto(\'ph_'+pt.k+'\')">+</div></div></div>').join('')+'</div>';
+  }
   // SEÇÃO 5: Assinatura
   if(sec===5){
     // 1. Prepara os dados para o resumo dependendo se é V1 ou V2
@@ -1294,9 +1309,64 @@ function renderForm(){
 } 
 
 function photoThumbs(arr,key){return arr.map((p,i)=>'<div class="pht"><img src="'+p.data+'"><button class="phd" onclick="rmPhoto(\''+key+'\','+i+')">×</button></div>').join('')}
-let _phTarget=''; function trigPhoto(t){_phTarget=t;el('photo-inp').click()}
-function onPhotoFiles(files){Array.from(files).forEach(f=>{const r=new FileReader();r.onload=ev=>{const ph={data:ev.target.result,name:f.name,type:_phTarget};if(_phTarget==='avp'){S.form.avaria_photos=S.form.avaria_photos||[];S.form.avaria_photos.push(ph)}else{S.form.photos=S.form.photos||[];S.form.photos.push(ph)};renderForm()};r.readAsDataURL(f)})}
-function rmPhoto(k,i){if(k==='avp')S.form.avaria_photos.splice(i,1);else S.form.photos.splice(i,1);renderForm();}
+let _phTarget=''; 
+function trigPhoto(t){ syncForm(); _phTarget=t; el('photo-inp').click() }
+function onPhotoFiles(files){
+  Array.from(files).forEach(f=>{
+    const r=new FileReader();
+    r.onload=ev=>{
+      const img = new Image();
+      img.onload = () => {
+        // Comprime a foto para caber no banco de dados e no PDF
+        const cv = document.createElement('canvas');
+        const MAX_W = 800, MAX_H = 800;
+        let w = img.width, h = img.height;
+        if(w > h) { if(w > MAX_W) { h *= MAX_W/w; w = MAX_W; } } 
+        else { if(h > MAX_H) { w *= MAX_H/h; h = MAX_H; } }
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d');
+        ctx.drawImage(img, 0, 0, w, h);
+        
+        // Salva em formato leve (JPEG com 60% de qualidade)
+        const dataUrl = cv.toDataURL('image/jpeg', 0.6);
+        
+        const ph={data:dataUrl, name:f.name, type:_phTarget};
+        if(_phTarget==='avp'){
+            if(S.formType === 'v2') {
+                S.form.avaria_photos_saida=S.form.avaria_photos_saida||[];
+                S.form.avaria_photos_saida.push(ph);
+            } else {
+                S.form.avaria_photos=S.form.avaria_photos||[];
+                S.form.avaria_photos.push(ph);
+            }
+        } else {
+            // SEPARA AS FOTOS GERAIS DA SAÍDA E DA CHEGADA
+            if(S.formType === 'v2') {
+                S.form.photos_saida=S.form.photos_saida||[];
+                S.form.photos_saida.push(ph);
+            } else {
+                S.form.photos=S.form.photos||[];
+                S.form.photos.push(ph);
+            }
+        }
+        renderForm();
+      };
+      img.src = ev.target.result;
+    };
+    r.readAsDataURL(f);
+  });
+}
+function rmPhoto(k,i){
+  syncForm(); 
+  if(k==='avp') {
+      if(S.formType === 'v2') S.form.avaria_photos_saida.splice(i,1);
+      else S.form.avaria_photos.splice(i,1);
+  } else {
+      if(S.formType === 'v2') S.form.photos_saida.splice(i,1);
+      else S.form.photos.splice(i,1);
+  }
+  renderForm();
+}
 function onPlacaInp(v){S.form.placa=v.toUpperCase();if(v.replace(/[^a-zA-Z0-9]/g,'').length>=7)lookupPlate(v)}
 
 // SIGNATURE CORE
@@ -1340,7 +1410,26 @@ function syncForm(){
   }
 }
 
-function valSec(sec){ return true; } 
+function valSec(sec){ 
+    // Bloqueio das Fotos
+    if(sec===4) {
+        const pts = ['ph_frente','ph_traseira','ph_lat_esq','ph_lat_dir','ph_painel'];
+        // Verifica o array correto dependendo se é V1 ou V2
+        const uploadedTypes = (S.formType === 'v2' ? (S.form.photos_saida||[]) : (S.form.photos||[])).map(p => p.type);
+        for(let pt of pts) {
+            if(!uploadedTypes.includes(pt)) {
+                toast('Falta anexar a foto: ' + pt.replace('ph_','').replace('_',' ').toUpperCase(), 'err');
+                return false;
+            }
+        }
+    }
+    // Bloqueio extra: Obriga a digitar o defeito se marcar "Com Avarias"
+    if(sec===3 && S.form.com_avarias && (!S.form.avarias_obs || S.form.avarias_obs.trim()==='')) {
+        toast('Você marcou "Com Avarias". É obrigatório descrevê-las no campo de texto.', 'err');
+        return false;
+    }
+    return true; 
+}
 function valAll(){ for(let i=0;i<5;i++){if(!valSec(i)){S.formSec=i;renderForm();return false}}return true}
 async function nextSec(){
   syncForm();
@@ -1603,34 +1692,81 @@ function dlPDF(id){
   // Checa se já tem dados de saída (se foi importado ou se é vistoria 2 fechada)
   const temSaida = !!(i.cloned_from || (i.retorno_data && i.retorno_data.trim() !== ''));
   
-  doc.setFont('helvetica', 'normal');
-  addTxt('Data:', '', m, m); 
-  doc.text(i.saida_data || '—', 60, y); 
-  doc.text(temSaida ? (i.retorno_data || '—') : '—', 120, y); y += 6;
+  // Função auxiliar para formatar data (YYYY-MM-DD para DD-MM-AAAA)
+  const fmtDt = (d) => { 
+     if(!d) return '—'; 
+     const p = d.split('-'); 
+     return p.length === 3 ? `${p[2]}-${p[1]}-${p[0]}` : d; 
+  };
+
+  doc.setFont('helvetica', 'bold');
+  doc.text('Data:', m, y); doc.setFont('helvetica', 'normal');
+  doc.text(fmtDt(i.saida_data), 60, y); 
+  doc.text(temSaida ? fmtDt(i.retorno_data) : '—', 120, y); y += 6;
   
-  addTxt('Horário:', '', m, m); 
+  doc.setFont('helvetica', 'bold');
+  doc.text('Horário:', m, y); doc.setFont('helvetica', 'normal');
   doc.text(i.saida_horario || '—', 60, y); 
   doc.text(temSaida ? (i.retorno_horario || '—') : '—', 120, y); y += 6;
   
-  addTxt('Hodômetro:', '', m, m); 
+  doc.setFont('helvetica', 'bold');
+  doc.text('Hodômetro:', m, y); doc.setFont('helvetica', 'normal');
   doc.text((i.saida_hodometro ? i.saida_hodometro + ' km' : '—'), 60, y); 
   doc.text(temSaida ? (i.retorno_hodometro ? i.retorno_hodometro + ' km' : '—') : '—', 120, y); y += 6;
   
-  addTxt('Pneus:', '', m, m); 
+  doc.setFont('helvetica', 'bold');
+  doc.text('Pneus:', m, y); doc.setFont('helvetica', 'normal');
   doc.text(i.saida_pneus || '—', 60, y); 
   doc.text(temSaida ? (i.retorno_pneus || '—') : '—', 120, y); y += 6;
   
-  addTxt('Tanque:', '', m, m); 
+  doc.setFont('helvetica', 'bold');
+  doc.text('Tanque:', m, y); doc.setFont('helvetica', 'normal');
   doc.text(i.saida_tanque || '—', 60, y); 
   doc.text(temSaida ? (i.retorno_tanque || '—') : '—', 120, y); y += 10;
 
-  // 6. Avarias
-  addH('AVARIAS');
-  doc.setFont('helvetica', i.com_avarias ? 'normal' : 'bold');
-  const avText = i.com_avarias ? (i.avarias_obs || 'Com avarias não descritas') : 'SEM AVARIAS';
-  const splitAv = doc.splitTextToSize(avText, w - m*2);
-  doc.text(splitAv, m, y);
-  y += (splitAv.length * 5) + 5;
+  // Renderiza as fotos das Avarias no PDF
+  let fotosAvariasTodas = [];
+  if(i.avaria_photos) fotosAvariasTodas = fotosAvariasTodas.concat(i.avaria_photos.map(p => ({...p, legend: 'Chegada'})));
+  if(i.avaria_photos_saida) fotosAvariasTodas = fotosAvariasTodas.concat(i.avaria_photos_saida.map(p => ({...p, legend: 'Saída'})));
+
+  if(fotosAvariasTodas.length > 0) {
+      if(y > 250) { doc.addPage(); y = 20; }
+      doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+      doc.text('Fotos das Avarias:', m, y); y += 5;
+      let px = m;
+      fotosAvariasTodas.forEach(ph => {
+          if(px > 150) { px = m; y += 45; } 
+          if(y > 250) { doc.addPage(); y = 20; px = m; } 
+          try { doc.addImage(ph.data, 'JPEG', px, y, 55, 40); } catch(e){}
+          doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+          doc.text(ph.legend, px + 27, y + 43, {align: 'center'});
+          px += 60;
+      });
+      y += 48;
+  }
+
+  // Renderiza o Registro Fotográfico Obrigatório
+  let fotosGeraisTodas = [];
+  if(i.photos) fotosGeraisTodas = fotosGeraisTodas.concat(i.photos.map(p => ({...p, legend: 'Chegada'})));
+  if(i.photos_saida) fotosGeraisTodas = fotosGeraisTodas.concat(i.photos_saida.map(p => ({...p, legend: 'Saída'})));
+
+  if(fotosGeraisTodas.length > 0) {
+      if(y > 240) { doc.addPage(); y = 20; }
+      addH('REGISTRO FOTOGRÁFICO');
+      let px = m;
+      fotosGeraisTodas.forEach(ph => {
+          if(px > 150) { px = m; y += 45; }
+          if(y > 250) { doc.addPage(); y = 20; px = m; }
+          try { doc.addImage(ph.data, 'JPEG', px, y, 55, 40); } catch(e){}
+          
+          doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+          const angulo = ph.type.replace('ph_', '').toUpperCase().replace('_', ' ');
+          doc.text(`${angulo} (${ph.legend})`, px + 27, y + 43, {align: 'center'});
+          
+          px += 60;
+      });
+      y += 48;
+  }
 
   // 7. Assinaturas
   if(y > 230) { doc.addPage(); y = 20; } 
