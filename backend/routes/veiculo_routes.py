@@ -69,31 +69,22 @@ def buscar_veiculo(placa):
 @veiculo_bp.route('/api/veiculos', methods=['POST'])
 def cadastrar_veiculo():
     dados = request.get_json()
-    
-    # Validação simples
-    campos_obrigatorios = ['placa', 'marca', 'modelo', 'ano']
-    for campo in campos_obrigatorios:
-        if campo not in dados:
-            return jsonify({"erro": f"O campo {campo} é obrigatório"}), 400
-            
     conn = get_db_connection()
     try:
         cursor = conn.cursor()
         comando_sql = """
-            INSERT INTO Veiculo (placa, marca, modelo, ano, condutor, rota, orgao_origem, combustivel, tipo)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+            INSERT INTO Veiculo (placa, marca, modelo, ano, condutor, rota, orgao_origem, combustivel, tipo, cadastrado_por, municipio)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         valores = (
             dados['placa'], dados['marca'], dados['modelo'], dados['ano'],
-            dados.get('condutor', None), dados.get('rota', None), dados.get('orgao_origem', None),
-            dados.get('combustivel', None), dados.get('tipo', None)
+            dados.get('condutor'), dados.get('rota'), dados.get('orgao_origem'),
+            dados.get('combustivel'), dados.get('tipo'), dados.get('cadastrado_por'),
+            dados.get('municipio') # <-- NOVO CAMPO
         )
         cursor.execute(comando_sql, valores)
-        conn.commit() # Salva a alteração no banco
-        
-        return jsonify({"status": "sucesso", "mensagem": "Veículo cadastrado com sucesso!"}), 201
-    except mysql.connector.IntegrityError:
-        return jsonify({"erro": "Já existe um veículo cadastrado com esta placa"}), 409
+        conn.commit()
+        return jsonify({"status": "sucesso"}), 201
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
     finally:
@@ -108,28 +99,23 @@ def cadastrar_veiculo():
 def atualizar_veiculo(placa):
     dados = request.get_json()
     conn = get_db_connection()
-    
     try:
         cursor = conn.cursor()
-        # Atualiza também marca, modelo, ano, orgao_origem, combustivel e tipo
         comando_sql = """
             UPDATE Veiculo 
-            SET marca = %s, modelo = %s, ano = %s, orgao_origem = %s, combustivel = %s, tipo = %s 
+            SET marca = %s, modelo = %s, ano = %s, orgao_origem = %s, combustivel = %s, tipo = %s, cadastrado_por = %s, municipio = %s 
             WHERE placa = %s
         """
         valores = (
             dados.get('marca'), dados.get('modelo'), dados.get('ano'), 
-            dados.get('orgao_origem'), dados.get('combustivel'), dados.get('tipo'), 
+            dados.get('orgao_origem'), dados.get('combustivel'), dados.get('tipo'),
+            dados.get('cadastrado_por'),
+            dados.get('municipio'), # <-- NOVO CAMPO
             placa
         )
-        
         cursor.execute(comando_sql, valores)
         conn.commit()
-        
-        if cursor.rowcount > 0:
-            return jsonify({"status": "sucesso", "mensagem": "Veículo atualizado com sucesso"}), 200
-        else:
-            return jsonify({"erro": "Veículo não encontrado ou dados iguais"}), 404
+        return jsonify({"status": "sucesso"}), 200
     except Exception as e:
         return jsonify({"erro": str(e)}), 500
     finally:
