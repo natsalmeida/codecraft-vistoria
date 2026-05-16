@@ -80,7 +80,7 @@ def cadastrar_veiculo():
             dados['placa'], dados['marca'], dados['modelo'], dados['ano'],
             dados.get('condutor'), dados.get('rota'), dados.get('orgao_origem'),
             dados.get('combustivel'), dados.get('tipo'), dados.get('cadastrado_por'),
-            dados.get('municipio') # <-- NOVO CAMPO
+            dados.get('municipio') 
         )
         cursor.execute(comando_sql, valores)
         conn.commit()
@@ -110,7 +110,7 @@ def atualizar_veiculo(placa):
             dados.get('marca'), dados.get('modelo'), dados.get('ano'), 
             dados.get('orgao_origem'), dados.get('combustivel'), dados.get('tipo'),
             dados.get('cadastrado_por'),
-            dados.get('municipio'), # <-- NOVO CAMPO
+            dados.get('municipio'), 
             placa
         )
         cursor.execute(comando_sql, valores)

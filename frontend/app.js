@@ -116,7 +116,7 @@ async function enterApp(){
               ano: v.ano, condutor: v.condutor, rota: v.rota, orgao_origem: v.orgao_origem,
               combustivel: v.combustivel, tipo: v.tipo, 
               cadastrado_por: v.cadastrado_por,
-              municipio: v.municipio, 
+              municipio: v.municipio, // <-- O SEGREDO ESTAVA AQUI! Faltava puxar do banco.
               active: true
           }));
           DB.set('vehicles', mappedV);
@@ -136,13 +136,13 @@ async function enterApp(){
       }
   } catch(e) { console.log('Offline mode for users'); }
 
-  // SINCRONIZAÇÃO: Equipamentos 
+  // SINCRONIZAÇÃO NOVA: Equipamentos (Vêm 100% do Banco de Dados)
   try {
       const resE = await fetch(`${API_URL}/equipamentos`);
       if(resE.ok) {
           const dataE = await resE.json();
           const mappedE = dataE.dados.map(e => ({
-              id: e.id_equipamento, 
+              id: e.id_equipamento, // Guarda o ID real do banco
               key: e.nome_equipamento.toLowerCase().replace(/\s+/g,'_'),
               label: e.nome_equipamento,
               active: true
@@ -321,7 +321,7 @@ function renderG(){
         groups[p].push(i);
     });
 
-    // 2. Inclui todos os veículos da frota! Se não tiver vistoria, fica com uma lista vazia.
+    // 2. O SEGREDO AQUI: Inclui todos os veículos da frota! Se não tiver vistoria, fica com uma lista vazia.
     vehicles.forEach(v => {
         if(!groups[v.placa]) groups[v.placa] = [];
     });
@@ -539,7 +539,7 @@ async function addVehicle(){
   
   if(placaExiste) {
       toast('⚠️ Esta placa já está cadastrada no sistema!', 'err');
-      return; 
+      return; // Para a execução e não deixa salvar
   }
   // ==========================================
   
@@ -724,7 +724,7 @@ async function delEquip(index){
   if(!confirm('⚠️ Tem certeza que deseja excluir este acessório DEFINITIVAMENTE do banco de dados?')) return;
   
   const eq = DB.get('equipment') || [];
-  const item = eq[index]; 
+  const item = eq[index]; // Pega o item que clicamos
   
   // Tenta apagar no MySQL (se ele tiver um ID do banco)
   if(item.id) {
@@ -1475,7 +1475,7 @@ async function syncVistoriaAPI(){
       const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
       const data = await res.json();
       if(res.ok) {
-          if(!isV2) S.form.db_id = data.id_vistoria; 
+          if(!isV2) S.form.db_id = data.id_vistoria; // Guarda a ID gerada no banco!
           toast('Integrado com sucesso no MySQL!', 'ok');
       } else {
           toast('Erro na integração: ' + data.erro, 'err');
@@ -1521,7 +1521,7 @@ function dlPDF(id){
   let y = 15;
   
   const addH = (title) => {
-    doc.setFillColor(230, 230, 230); 
+    doc.setFillColor(230, 230, 230); // Cinza claro
     doc.rect(m, y, w - m*2, 6, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
@@ -1590,7 +1590,7 @@ function dlPDF(id){
      doc.text(`${valStr} ${eq.label}`, eqX, eqY);
      
      eqX += 45;
-     if(eqX > 180) { eqX = m; eqY += 6; } 
+     if(eqX > 180) { eqX = m; eqY += 6; } // Quebra a linha a cada 4 itens
   });
   y = eqY + (eqX === m ? 4 : 10);
 
