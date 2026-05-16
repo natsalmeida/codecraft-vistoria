@@ -58,39 +58,3 @@ def add_equipamento():
         if conn and conn.is_connected():
             cursor.close()
             conn.close()
-            
-# ==========================================
-# READ ALL (Buscar todos os equipamentos) - GET
-# ==========================================
-@equipamento_bp.route('/api/equipamentos', methods=['GET'])
-def listar_equipamentos():
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor(dictionary=True)
-        cursor.execute("SELECT * FROM Equipamento ORDER BY id_equipamento;")
-        equipamentos = cursor.fetchall()
-        return jsonify({"status": "sucesso", "dados": equipamentos}), 200
-    except Exception as e:
-        return jsonify({"erro": str(e)}), 500
-    finally:
-        if conn and conn.is_connected():
-            cursor.close()
-            conn.close()
-
-# ==========================================
-# DELETE (Remover um equipamento) - DELETE
-# ==========================================
-@equipamento_bp.route('/api/equipamentos/<int:id>', methods=['DELETE'])
-def deletar_equipamento(id):
-    conn = get_db_connection()
-    try:
-        cursor = conn.cursor()
-        cursor.execute("DELETE FROM Equipamento WHERE id_equipamento = %s", (id,))
-        conn.commit()
-        return jsonify({"status": "sucesso"}), 200
-    except Exception as e:
-        return jsonify({"erro": str(e)}), 500
-    finally:
-        if conn and conn.is_connected():
-            cursor.close()
-            conn.close()
