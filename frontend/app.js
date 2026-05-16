@@ -114,7 +114,10 @@ async function enterApp(){
           const mappedV = data.dados.map(v => ({
               id: 'v_'+v.placa, placa: v.placa, marca_modelo: `${v.marca} ${v.modelo}`,
               ano: v.ano, condutor: v.condutor, rota: v.rota, orgao_origem: v.orgao_origem,
-              combustivel: 'Flex', tipo: 'requisitado', active: true
+              combustivel: v.combustivel, tipo: v.tipo, 
+              cadastrado_por: v.cadastrado_por,
+              municipio: v.municipio, 
+              active: true
           }));
           DB.set('vehicles', mappedV);
       }
@@ -133,6 +136,21 @@ async function enterApp(){
       }
   } catch(e) { console.log('Offline mode for users'); }
 
+  // SINCRONIZAÇÃO: Equipamentos 
+  try {
+      const resE = await fetch(`${API_URL}/equipamentos`);
+      if(resE.ok) {
+          const dataE = await resE.json();
+          const mappedE = dataE.dados.map(e => ({
+              id: e.id_equipamento, 
+              key: e.nome_equipamento.toLowerCase().replace(/\s+/g,'_'),
+              label: e.nome_equipamento,
+              active: true
+          }));
+          DB.set('equipment', mappedE);
+      }
+  } catch(e) { console.log('Offline mode for equipment'); }
+  
   // SINCRONIZAÇÃO 3: Vistorias 
   try {
       const resI = await fetch(`${API_URL}/vistorias`);
@@ -272,42 +290,162 @@ function renderG(){
     '</div>';
   }
   else if(S.gTab==='g-insp'){
-    const searchHtml='<div class="search-box"><input class="fi" placeholder="🔍 Pesquisar por placa, condutor..." value="'+S.gSearch+'" oninput="S.gSearch=this.value;renderG()"></div>';
-    let filtered=yi;
-    if(S.gSearch){const q=S.gSearch.toLowerCase();filtered=yi.filter(i=>(i.placa||'').toLowerCase().includes(q)||(i.nome_condutor||'').toLowerCase().includes(q)||(i.inspector_name||'').toLowerCase().includes(q))}
-    const groups={}; filtered.forEach(i=>{const p=i.placa||'SEM PLACA';if(!groups[p])groups[p]=[];groups[p].push(i)});
-    const groupKeys=Object.keys(groups).sort();
+    // Inicializa as variáveis de filtro caso ainda não existam
+    S.gFilterStatus = S.gFilterStatus || '';
+    S.gFilterCity = S.gFilterCity || '';
+
+    // Cria a barra superior com Pesquisa, Filtro de Status e Filtro de Município
+    const filterHtml='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">'+
+      '<div class="search-box" style="flex:1;min-width:250px;margin-bottom:0">'+
+        '<input class="fi" placeholder="🔍 Pesquisar por placa, condutor..." value="'+S.gSearch+'" oninput="S.gSearch=this.value;renderG()">'+
+      '</div>'+
+      '<select class="fi" style="width:auto;flex-shrink:0" onchange="S.gFilterStatus=this.value;renderG()">'+
+        '<option value="" '+(!S.gFilterStatus?'selected':'')+'>Status: Todos</option>'+
+        '<option value="fechado" '+(S.gFilterStatus==='fechado'?'selected':'')+'>✅ Vistoriados (Fechados)</option>'+
+        '<option value="pendente" '+(S.gFilterStatus==='pendente'?'selected':'')+'>⏳ Não Vistoriados (Pendentes)</option>'+
+      '</select>'+
+      '<select class="fi" style="width:auto;flex-shrink:0" onchange="S.gFilterCity=this.value;renderG()">'+
+        '<option value="" '+(!S.gFilterCity?'selected':'')+'>Município: Todos</option>'+
+        '<option value="Ponte Alta do Tocantins" '+(S.gFilterCity==='Ponte Alta do Tocantins'?'selected':'')+'>Ponte Alta do Tocantins</option>'+
+        '<option value="Mateiros" '+(S.gFilterCity==='Mateiros'?'selected':'')+'>Mateiros</option>'+
+        '<option value="Pindorama" '+(S.gFilterCity==='Pindorama'?'selected':'')+'>Pindorama</option>'+
+      '</select>'+
+    '</div>';
+
+    const groups = {}; 
     
-    c.innerHTML='<div class="anim-in"><h3 style="color:var(--gold);font-size:14px;font-weight:800;margin-bottom:10px">VISTORIAS (Locais & Sincronizadas)</h3>'+searchHtml+
-    (groupKeys.length===0?'<div class="card" style="text-align:center;color:var(--txt3);padding:30px">Nenhuma vistoria encontrada</div>':
+    // 1. Agrupa todas as vistorias existentes por placa
+    yi.forEach(i => {
+        const p = i.placa || 'SEM PLACA';
+        if(!groups[p]) groups[p] = [];
+        groups[p].push(i);
+    });
+
+    // 2. Inclui todos os veículos da frota! Se não tiver vistoria, fica com uma lista vazia.
+    vehicles.forEach(v => {
+        if(!groups[v.placa]) groups[v.placa] = [];
+    });
+
+    let groupKeys = Object.keys(groups);
+
+    // 3. Aplica os filtros sobre a lista consolidada
+    if(S.gSearch){
+        const q = S.gSearch.toLowerCase();
+        groupKeys = groupKeys.filter(p => {
+            const v = vehicles.find(x => x.placa === p);
+            const matchVeiculo = v && (v.placa.toLowerCase().includes(q) || v.marca_modelo.toLowerCase().includes(q) || (v.condutor||'').toLowerCase().includes(q));
+            const matchVistoria = groups[p].some(i => (i.nome_condutor||'').toLowerCase().includes(q) || (i.inspector_name||'').toLowerCase().includes(q));
+            return matchVeiculo || matchVistoria;
+        });
+    }
+    
+    if(S.gFilterCity){
+        // Normaliza o filtro: minúsculo e sem espaços nas pontas
+        const fc = S.gFilterCity.toLowerCase().trim();
+        
+        groupKeys = groupKeys.filter(p => {
+            const v = vehicles.find(x => x.placa === p);
+            
+            // Pega o município do veículo ou da primeira vistoria do grupo
+            let munRaw = '';
+            if (v && v.municipio) {
+                munRaw = v.municipio;
+            } else if (groups[p] && groups[p][0] && groups[p][0].municipio) {
+                munRaw = groups[p][0].municipio;
+            }
+            
+            // Normaliza o dado do banco para comparar
+            const munDoc = String(munRaw).toLowerCase().trim();
+            
+            // Log para você ver no console o que está acontecendo (F12)
+            if(munDoc === fc) console.log("Correspondência encontrada para placa:", p);
+            
+            return munDoc === fc;
+        });
+    }
+
+    if(S.gFilterStatus === 'fechado'){
+        groupKeys = groupKeys.filter(p => {
+            const vist = groups[p];
+            if(vist.length === 0) return false; 
+            const hasOpen = vist.some(i => i.mysql_status === 'Aberta' || (i.status === 'saida_completa' && !i.mysql_status && !vist.some(v2 => v2.cloned_from === i.id)));
+            return !hasOpen; 
+        });
+    } else if (S.gFilterStatus === 'pendente') {
+        groupKeys = groupKeys.filter(p => {
+            const vist = groups[p];
+            if(vist.length === 0) return true; 
+            const hasOpen = vist.some(i => i.mysql_status === 'Aberta' || (i.status === 'saida_completa' && !i.mysql_status && !vist.some(v2 => v2.cloned_from === i.id)));
+            return hasOpen; 
+        });
+    }
+    
+    groupKeys.sort();
+    
+    // 4. Monta a lista na tela
+    c.innerHTML='<div class="anim-in"><h3 style="color:var(--gold);font-size:14px;font-weight:800;margin-bottom:10px">VISTORIAS (Locais & Sincronizadas)</h3>'+filterHtml+
+    (groupKeys.length===0?'<div class="card" style="text-align:center;color:var(--txt3);padding:30px">Nenhum registro encontrado com estes filtros</div>':
     groupKeys.map(placa=>{
       const items=groups[placa];const v=vehicles.find(x=>x.placa===placa);
       return '<div class="plate-group"><div class="plate-group-hdr"><div><span style="font-weight:800;color:var(--gold);font-family:var(--fm);letter-spacing:1px;font-size:15px">'+placa+'</span><span style="margin-left:10px;font-size:12px;color:var(--txt2)">'+(v?v.marca_modelo:'')+'</span></div><span class="bdg bdg-blu">'+items.length+' registros</span></div><div class="plate-group-body">'+
+      (items.length === 0 ? '<div style="padding:14px;font-size:12px;color:#f59e0b;font-weight:700">⏳ Veículo na frota, mas ainda não vistoriado.</div>' : 
       items.map(i=>{
           const st=stInfo(i.status);
           
-          // Limpeza da data para o Gestor 
           let dataFormatada = i.saida_data || '';
           if(dataFormatada.length > 10 && dataFormatada.includes('GMT')) {
               const d = new Date(dataFormatada);
               dataFormatada = d.toISOString().split('T')[0];
           }
 
-          return '<div class="card ii" style="margin:0;border-radius:0;border-bottom:1px solid var(--brd)" onclick="viewInsp(\''+i.id+'\')"><div class="iic" style="background:'+st.bg+'">'+st.ic+'</div><div style="flex:1"><div style="font-size:12px;color:var(--txt2)">'+(i.inspector_name||'—')+' · '+dataFormatada+'</div></div><span class="bdg '+st.cl+'">'+st.lb+'</span></div>'
-      }).join('')+
+          return '<div class="card ii" style="margin:0;border-radius:0;border-bottom:1px solid var(--brd)" onclick="viewInsp(\''+i.id+'\')"><div class="iic" style="background:'+st.bg+'">'+st.ic+'</div><div style="flex:1"><div style="font-size:12px;color:var(--txt2)">'+(i.inspector_name||'—')+' · '+dataFormatada+' — 📍 '+(i.itinerario||'Sem rota')+'</div></div><span class="bdg '+st.cl+'">'+st.lb+'</span></div>'
+      }).join(''))+
       '</div></div>';
     }).join(''))+'</div>';
   }
   else if(S.gTab==='g-veic'){
-    const searchHtml='<div class="search-box"><input class="fi" placeholder="🔍 Pesquisar veículo..." value="'+S.gSearch+'" oninput="S.gSearch=this.value;renderG()"></div>';
+    // Inicializa a variável do filtro caso não exista
+    S.gVeicCity = S.gVeicCity || '';
+
+    // Cria a barra superior com Pesquisa em texto e o Dropdown de Município
+    const searchHtml='<div style="display:flex;gap:8px;margin-bottom:14px;flex-wrap:wrap">'+
+      '<div class="search-box" style="flex:1;min-width:250px;margin-bottom:0">'+
+        '<input class="fi" placeholder="🔍 Pesquisar veículo..." value="'+S.gSearch+'" oninput="S.gSearch=this.value;renderG()">'+
+      '</div>'+
+      '<select class="fi" style="width:auto;flex-shrink:0" onchange="S.gVeicCity=this.value;renderG()">'+
+        '<option value="" '+(!S.gVeicCity?'selected':'')+'>Município: Todos</option>'+
+        '<option value="Ponte Alta do Tocantins" '+(S.gVeicCity==='Ponte Alta do Tocantins'?'selected':'')+'>Ponte Alta do Tocantins</option>'+
+        '<option value="Mateiros" '+(S.gVeicCity==='Mateiros'?'selected':'')+'>Mateiros</option>'+
+        '<option value="Pindorama" '+(S.gVeicCity==='Pindorama'?'selected':'')+'>Pindorama</option>'+
+      '</select>'+
+    '</div>';
     
-    let fPend = vPendentes;
-    let fFechados = vFechados;
+    // Filtramos as listas vPendentes e vFechados (que já foram calculadas no início da renderG)
+    let fPend = [...vPendentes];
+    let fFechados = [...vFechados];
     
+    // Filtro 1: Texto (Pesquisa normal)
     if(S.gSearch){
-        const q = S.gSearch.toLowerCase();
-        fPend = vPendentes.filter(v => v.placa.toLowerCase().includes(q) || v.marca_modelo.toLowerCase().includes(q) || (v.condutor||'').toLowerCase().includes(q));
-        fFechados = vFechados.filter(v => v.placa.toLowerCase().includes(q) || v.marca_modelo.toLowerCase().includes(q) || (v.condutor||'').toLowerCase().includes(q));
+        const q = S.gSearch.toLowerCase().trim();
+        fPend = fPend.filter(v => v.placa.toLowerCase().includes(q) || v.marca_modelo.toLowerCase().includes(q) || (v.condutor||'').toLowerCase().includes(q));
+        fFechados = fFechados.filter(v => v.placa.toLowerCase().includes(q) || v.marca_modelo.toLowerCase().includes(q) || (v.condutor||'').toLowerCase().includes(q));
+    }
+
+   // Filtro 2: Município (Versão Ultra-Segura)
+    if(S.gVeicCity){
+        const fc = S.gVeicCity.toLowerCase().trim();
+        
+        fPend = fPend.filter(v => {
+            const vMun = String(v.municipio || '').toLowerCase().trim();
+            return vMun === fc;
+        });
+        
+        fFechados = fFechados.filter(v => {
+            const vMun = String(v.municipio || '').toLowerCase().trim();
+            return vMun === fc;
+        });
+        
+        console.log("Filtrando por:", fc, "Resultados:", fPend.length + fFechados.length);
     }
 
     c.innerHTML='<div class="anim-in">'+
@@ -322,7 +460,10 @@ function renderG(){
 
     '<div class="fr"><div class="fg"><label class="fl">Ano</label><input class="fi" id="nv-ano" type="number" placeholder="2024"></div>'+
     '<div class="fg"><label class="fl">Combustível</label><select class="fi" id="nv-comb"><option value="Flex">Flex</option><option value="Gasolina">Gasolina</option><option value="Diesel">Diesel</option><option value="Etanol">Etanol</option></select></div></div>'+ // ADICIONADO
+    '<div class="fr">'+
     '<div class="fg"><label class="fl">Tipo</label><select class="fi" id="nv-tipo"><option value="requisitado">Requisitado</option><option value="alugado">Alugado</option></select></div>'+
+    '<div class="fg"><label class="fl">Município</label><select class="fi" id="nv-mun"><option value="Ponte Alta do Tocantins">Ponte Alta do Tocantins</option><option value="Mateiros">Mateiros</option><option value="Pindorama">Pindorama</option></select></div>'+
+    '</div>'+
     '<button class="btn btn-grn" onclick="addVehicle()">Salvar Veículo</button></div>'+
     
     '<h3 style="color:var(--grn);font-size:14px;font-weight:800;margin:16px 0 10px">✓ CICLO FECHADO ('+fFechados.length+')</h3>'+
@@ -334,7 +475,10 @@ function renderG(){
     c.innerHTML='<div class="anim-in">'+
     '<h3 style="color:var(--gold);font-size:14px;font-weight:800;margin-bottom:6px">GERENCIAR ACESSÓRIOS</h3>'+
     '<div class="card-w"><div class="ckg">'+
-   equipment.map((eq,i)=>'<label class="cki'+(eq.active?' ck':'')+'"><input type="checkbox" '+(eq.active?'checked':'')+' onchange="togEquip('+i+',this.checked,this.parentElement)">'+eq.label+'</label>').join('')+
+    equipment.map((eq,i)=>'<div style="display:flex;gap:4px">'+
+      '<label class="cki'+(eq.active?' ck':'')+'" style="flex:1;margin:0"><input type="checkbox" '+(eq.active?'checked':'')+' onchange="togEquip('+i+',this.checked,this.parentElement)">'+eq.label+'</label>'+
+      '<button class="btn btn-out" style="padding:0 10px; border-color:var(--red); color:var(--red); width:auto; border-radius:8px" onclick="delEquip('+i+')">🗑️</button>'+
+    '</div>').join('')+
     '</div><div style="margin-top:16px;display:flex;gap:8px"><input class="fiw" id="neq-inp" placeholder="Nome do novo acessório..." style="flex:1"><button class="btn btn-grn btn-sm" onclick="addEquip()" style="width:auto;padding:8px 16px">+ Adicionar</button></div></div></div>';
   }
   else if(S.gTab==='g-users'){
@@ -343,14 +487,13 @@ function renderG(){
     '<div class="card"><h4 style="color:var(--gold);font-size:13px;margin-bottom:14px">➕ CADASTRAR NOVO USUÁRIO</h4>'+
     '<div class="fg"><label class="fl">Nome Completo <span class="req">*</span></label><input class="fi" id="nu-name" placeholder="Nome completo"></div>'+
     '<div class="fg"><label class="fl">E-mail <span class="req">*</span></label><input class="fi" id="nu-email" type="email" placeholder="email@tre-to.jus.br"></div>'+
-    '<div class="fr"><div class="fg"><label class="fl">Matrícula</label><input class="fi" id="nu-mat" placeholder="Ex: V-003"></div>'+
-    '<div class="fg"><label class="fl">Perfil</label><select class="fi" id="nu-role"><option value="vistoriador">Vistoriador</option><option value="gestor">Gestor</option></select></div></div>'+
-    '<div class="fg"><label class="fl">Senha <span class="req">*</span></label><input class="fi" id="nu-pass" type="password" placeholder="Senha de acesso"></div>'+
+    '<div class="fr"><div class="fg"><label class="fl">Perfil</label><select class="fi" id="nu-role"><option value="vistoriador">Vistoriador</option><option value="gestor">Gestor</option></select></div>'+
+    '<div class="fg"><label class="fl">Senha <span class="req">*</span></label><input class="fi" id="nu-pass" type="password" placeholder="Senha de acesso"></div></div>'+
     '<button class="btn btn-grn" onclick="createUser()">Cadastrar Usuário</button></div>'+
     '<h4 style="color:var(--txt2);font-size:13px;font-weight:800;margin:16px 0 10px">USUÁRIOS CADASTRADOS</h4>'+
     users.map(u=>'<div class="card" style="display:flex;align-items:center;gap:12px;padding:14px;position:relative;padding-bottom:50px">'+
     '<div style="width:42px;height:42px;border-radius:50%;background:'+(u.role==='gestor'||u.role==='Gestor'?'linear-gradient(135deg,var(--gold),var(--gold-d))':'linear-gradient(135deg,var(--blue),var(--blue-d))')+';display:flex;align-items:center;justify-content:center;font-size:16px;color:'+(u.role==='gestor'||u.role==='Gestor'?'#0b1120':'#fff')+';font-weight:900;flex-shrink:0">'+(u.full_name?.charAt(0)||'?')+'</div>'+
-    '<div style="flex:1"><div style="font-weight:700;font-size:14px">'+(u.full_name||'—')+'</div><div style="font-size:12px;color:var(--txt3)">'+(u.email||'—')+' · '+(u.matricula||'—')+'</div></div>'+
+    '<div style="flex:1"><div style="font-weight:700;font-size:14px">'+(u.full_name||'—')+'</div><div style="font-size:12px;color:var(--txt3)">'+(u.email||'—')+'</div></div>'+
     '<span class="bdg '+(u.role==='gestor'||u.role==='Gestor'?'bdg-gld':'bdg-blu')+'" style="position:absolute;top:14px;right:14px">'+(u.role||'').toLowerCase()+'</span>'+
     '<div style="position:absolute;right:14px;bottom:12px;display:flex;gap:8px">'+
       '<button class="btn btn-out btn-sm" style="padding:4px 10px;font-size:12px;width:auto;min-height:0" onclick="editUser(\''+u.id+'\')">✏️ Editar</button>'+
@@ -366,7 +509,8 @@ function renderG(){
 
 // 1. Desenha o Card do veículo com os botões de Editar e Excluir
 function vehicleCardHtml(v,status){
-  return '<div class="card vi" style="position:relative; padding-bottom:40px"><div class="vii '+status+'">'+(status==='ok'?'✓':'🚗')+'</div><div style="flex:1"><div style="font-weight:800;color:var(--gold);font-family:var(--fm);letter-spacing:1px">'+v.placa+'</div><div style="font-size:13px;color:var(--txt2)">'+v.marca_modelo+'</div><div style="font-size:11px;color:var(--txt3)">'+v.ano+' · '+v.combustivel+' · '+v.tipo+'</div></div><span class="bdg '+(v.tipo==='alugado'?'bdg-pur':'bdg-grn')+'" style="position:absolute; top:14px; right:14px;">'+v.tipo+'</span>'+
+  const criador = v.cadastrado_por ? v.cadastrado_por.charAt(0).toUpperCase() + v.cadastrado_por.slice(1) : '';
+  return '<div class="card vi" style="position:relative; padding-bottom:40px"><div class="vii '+status+'">'+(status==='ok'?'✓':'🚗')+'</div><div style="flex:1"><div style="font-weight:800;color:var(--gold);font-family:var(--fm);letter-spacing:1px">'+v.placa+'</div><div style="font-size:13px;color:var(--txt2)">'+v.marca_modelo+'</div><div style="font-size:11px;color:var(--txt3)">'+v.ano+' · '+v.combustivel+' · '+v.tipo+(criador ? ' · 👤 '+criador : '')+'</div></div><span class="bdg '+(v.tipo==='alugado'?'bdg-pur':'bdg-grn')+'" style="position:absolute; top:14px; right:14px;">'+v.tipo+'</span>'+
   '<div style="position:absolute;right:14px;bottom:12px;display:flex;gap:8px">'+
   '<button class="btn btn-out btn-sm" style="padding:4px 10px;font-size:12px;width:auto;min-height:0" onclick="editVehicle(\''+v.id+'\')">✏️ Editar</button>'+
   '<button class="btn btn-out btn-sm" style="padding:4px 10px;font-size:12px;width:auto;min-height:0;color:var(--red);border-color:var(--red)" onclick="delVehicle(\''+v.id+'\')">🗑️ Excluir</button>'+
@@ -381,10 +525,23 @@ async function addVehicle(){
   const rota=(el('nv-rota').value||'').trim();
   const orgao=(el('nv-orgao').value||'').trim();
   const ano=el('nv-ano').value||new Date().getFullYear();
-  const comb=el('nv-comb').value; // ADICIONADO
+  const comb=el('nv-comb').value; 
   const tipo=el('nv-tipo').value;
+  const mun = el('nv-mun').value;
   
   if(!placa||!marca_modelo){toast('Preencha placa e marca/modelo','err');return}
+  
+  // ==========================================
+  // BLOQUEIO DE PLACA DUPLICADA
+  // ==========================================
+  const vehicles=DB.get('vehicles')||[];
+  const placaExiste = vehicles.find(v => v.placa === placa);
+  
+  if(placaExiste) {
+      toast('⚠️ Esta placa já está cadastrada no sistema!', 'err');
+      return; 
+  }
+  // ==========================================
   
   try {
       const res = await fetch(`${API_URL}/veiculos`, {
@@ -397,15 +554,15 @@ async function addVehicle(){
               condutor: condutor,
               rota: rota,
               orgao_origem: orgao,
-              combustivel: comb, // ATUALIZADO (antes era 'Flex')
-              tipo: tipo           
+              combustivel: comb, 
+              tipo: tipo,
+              cadastrado_por: S.profile.role,
+              municipio: mun          
           })
       });
 
       if(res.ok) toast('Salvo no MySQL com sucesso!');
   } catch(e) { toast('Erro API - Salvo localmente', 'warn'); }
-
-  const vehicles=DB.get('vehicles')||[];
   
   // Atualiza o cache local (DB LOCAL)
   vehicles.push({
@@ -417,7 +574,9 @@ async function addVehicle(){
       orgao_origem: orgao,
       condutor: condutor, 
       rota: rota,        
-      tipo: tipo,        
+      tipo: tipo,
+      cadastrado_por: S.profile.role,
+      municipio: mun, 
       active: true
   });
   
@@ -479,7 +638,10 @@ function editVehicle(id){
     '<div class="fg"><label class="fl-d">Modelo <span class="req">*</span></label><input class="fiw" id="ev-modelo" value="'+(modelo||'')+'"></div></div>'+
     '<div class="fr"><div class="fg"><label class="fl-d">Ano</label><input type="number" class="fiw" id="ev-ano" value="'+(v.ano||'')+'"></div>'+
     '<div class="fg"><label class="fl-d">Combustível</label><select class="fiw" id="ev-comb"><option value="Flex" '+(v.combustivel==='Flex'?'selected':'')+'>Flex</option><option value="Gasolina" '+(v.combustivel==='Gasolina'?'selected':'')+'>Gasolina</option><option value="Etanol" '+(v.combustivel==='Etanol'?'selected':'')+'>Etanol</option><option value="Diesel" '+(v.combustivel==='Diesel'?'selected':'')+'>Diesel</option></select></div></div>'+
-    '<div class="fg"><label class="fl-d">Tipo</label><select class="fiw" id="ev-tipo"><option value="requisitado" '+(v.tipo==='requisitado'?'selected':'')+'>Requisitado</option><option value="alugado" '+(v.tipo==='alugado'?'selected':'')+'>Alugado</option></select></div>'+
+    '<div class="fr">'+
+      '<div class="fg"><label class="fl-d">Tipo</label><select class="fiw" id="ev-tipo"><option value="requisitado" '+(v.tipo==='requisitado'?'selected':'')+'>Requisitado</option><option value="alugado" '+(v.tipo==='alugado'?'selected':'')+'>Alugado</option></select></div>'+
+      '<div class="fg"><label class="fl-d">Município</label><select class="fiw" id="ev-mun"><option value="Ponte Alta do Tocantins" '+(v.municipio==='Ponte Alta do Tocantins'?'selected':'')+'>Ponte Alta do Tocantins</option><option value="Mateiros" '+(v.municipio==='Mateiros'?'selected':'')+'>Mateiros</option><option value="Pindorama" '+(v.municipio==='Pindorama'?'selected':'')+'>Pindorama</option></select></div>'+
+    '</div>'+
     '<div class="fg"><label class="fl-d">Órgão de Origem</label><input class="fiw" id="ev-orgao" value="'+(v.orgao_origem||'')+'"></div>'+
   '</div>'+
   '<div class="modal-f"><button class="btn btn-grn" onclick="saveEditVehicle(\''+v.id+'\')" style="flex:1">💾 Salvar Alterações</button><button class="btn btn-out" onclick="closeM()" style="flex:1">Cancelar</button></div>';
@@ -500,6 +662,7 @@ async function saveEditVehicle(id){
   const comb = el('ev-comb').value;
   const tipo = el('ev-tipo').value;
   const orgao = el('ev-orgao').value.trim();
+  const mun = el('ev-mun').value;
   const marca_modelo_concat = marca + ' ' + modelo;
 
   if(!marca || !modelo) { toast('Marca e Modelo são obrigatórios', 'err'); return; }
@@ -514,14 +677,16 @@ async function saveEditVehicle(id){
               ano: ano, 
               orgao_origem: orgao,
               combustivel: comb,   
-              tipo: tipo           
+              tipo: tipo,
+              cadastrado_por: v.cadastrado_por,
+              municipio: mun           
           })
       });
       if(res.ok) toast('Atualizado com sucesso no MySQL!', 'ok');
       else toast('Falha ao atualizar no banco de dados', 'err');
   } catch(e) { toast('Modo Offline: Atualizado localmente', 'warn'); }
 
-  vehicles[vIdx] = { ...v, marca_modelo: marca_modelo_concat, ano: ano, combustivel: comb, tipo: tipo, orgao_origem: orgao };
+  vehicles[vIdx] = { ...v, marca_modelo: marca_modelo_concat, ano: ano, combustivel: comb, tipo: tipo, orgao_origem: orgao, cadastrado_por: v.cadastrado_por, municipio: mun };
   DB.set('vehicles', vehicles);
   
   closeM();
@@ -554,10 +719,36 @@ async function addEquip(){
   renderG();
 }
 
+// Função para EXCLUIR um acessório do Banco e da Tela
+async function delEquip(index){
+  if(!confirm('⚠️ Tem certeza que deseja excluir este acessório DEFINITIVAMENTE do banco de dados?')) return;
+  
+  const eq = DB.get('equipment') || [];
+  const item = eq[index]; 
+  
+  // Tenta apagar no MySQL (se ele tiver um ID do banco)
+  if(item.id) {
+      try {
+          const res = await fetch(`${API_URL}/equipamentos/${item.id}`, { method: 'DELETE' });
+          if(!res.ok) {
+              toast('Erro ao excluir no banco de dados', 'err');
+              return;
+          }
+      } catch(e) { 
+          toast('Modo Offline: Não foi possível apagar no servidor agora.', 'warn');
+      }
+  }
+
+  // Remove o item da lista local e atualiza a tela
+  eq.splice(index, 1); 
+  DB.set('equipment', eq); 
+  renderG(); 
+  toast('Acessório removido com sucesso!', 'ok');
+}
+
 async function createUser(){
   const name=el('nu-name').value.trim();
   const email=el('nu-email').value.trim();
-  const mat=el('nu-mat').value.trim();
   const role=el('nu-role').value;
   const pass=el('nu-pass').value;
   
@@ -572,7 +763,6 @@ async function createUser(){
       return;
   }
 
-  // Define um ID temporário apenas como plano B (caso o servidor esteja offline)
   let userId = 'u' + Date.now();
 
   try {
@@ -596,20 +786,14 @@ async function createUser(){
           toast('Erro no banco: ' + (data.erro || 'Falha ao salvar'), 'err');
           return; 
       }
-  } catch(e) {
-      toast('Modo Offline: Salvo apenas localmente', 'warn');
-  }
+  } catch(e) { toast('Modo Offline: Salvo apenas localmente', 'warn'); }
   
-  // Salva no sistema local usando o ID REAL do Banco de Dados
-  users.push({id: userId, full_name:name, email, matricula:mat, role, pass, active:true});
+  users.push({id: userId, full_name:name, email, role, pass, active:true});
   DB.set('users',users);
   
-  // Limpa os campos da interface após cadastrar
   el('nu-name').value = '';
   el('nu-email').value = '';
-  el('nu-mat').value = '';
   el('nu-pass').value = '';
-  
   renderG();
 }
 
@@ -646,12 +830,11 @@ function editUser(id){
   '<div class="modal-b" style="padding:20px">'+
     '<div class="fg"><label class="fl-d">Nome Completo <span class="req">*</span></label><input class="fiw" id="eu-name" value="'+(u.full_name||'')+'"></div>'+
     '<div class="fg"><label class="fl-d">E-mail <span class="req">*</span></label><input class="fiw" id="eu-email" value="'+(u.email||'')+'"></div>'+
-    '<div class="fr"><div class="fg"><label class="fl-d">Matrícula</label><input class="fiw" id="eu-mat" value="'+(u.matricula||'')+'"></div>'+
-    '<div class="fg"><label class="fl-d">Perfil</label><select class="fiw" id="eu-role">'+
+    '<div class="fr"><div class="fg"><label class="fl-d">Perfil</label><select class="fiw" id="eu-role">'+
       '<option value="vistoriador" '+(u.role==='vistoriador'?'selected':'')+'>Vistoriador</option>'+
       '<option value="gestor" '+(u.role==='gestor'?'selected':'')+'>Gestor</option>'+
-    '</select></div></div>'+
-    '<div class="fg"><label class="fl-d">Nova Senha (deixe em branco para manter)</label><input type="password" class="fiw" id="eu-pass" placeholder="******"></div>'+
+    '</select></div>'+
+    '<div class="fg"><label class="fl-d">Nova Senha</label><input type="password" class="fiw" id="eu-pass" placeholder="(Em branco = manter)"></div></div>'+
   '</div>'+
   '<div class="modal-f"><button class="btn btn-grn" onclick="saveEditUser(\''+u.id+'\')" style="flex:1">💾 Salvar Alterações</button><button class="btn btn-out" onclick="closeM()" style="flex:1">Cancelar</button></div>';
   
@@ -671,7 +854,6 @@ async function saveEditUser(id){
   if(!name || !email) { toast('Nome e E-mail são obrigatórios', 'err'); return; }
 
   try {
-      // 1. Envia os dados com os mesmos nomes das colunas do MySQL
       const res = await fetch(`${API_URL}/usuarios/${id}`, {
           method: 'PUT',
           headers: {'Content-Type': 'application/json'},
@@ -690,15 +872,11 @@ async function saveEditUser(id){
           toast('Erro no banco: ' + (data.erro || 'Falha ao atualizar'), 'err');
           return; 
       }
-  } catch(e) { 
-      toast('Modo Offline: Atualizado apenas localmente', 'warn'); 
-  }
+  } catch(e) { toast('Modo Offline: Atualizado apenas localmente', 'warn'); }
 
-  // 2. Só atualiza a tela se o banco confirmou (ou se estiver offline)
   users[uIdx].full_name = name;
   users[uIdx].email = email;
   users[uIdx].role = role;
-  users[uIdx].matricula = el('eu-mat').value.trim();
   if(pass) users[uIdx].pass = pass;
   
   DB.set('users', users);
@@ -823,7 +1001,10 @@ function renderV(){
     if(S.vSearch){const q=S.vSearch.toLowerCase();fv=vehicles.filter(v=>v.placa.toLowerCase().includes(q)||v.marca_modelo.toLowerCase().includes(q))}
     c.innerHTML='<div class="anim-in">'+searchHtml+
     '<h3 style="color:#f59e0b;font-size:14px;font-weight:800;margin:16px 0 10px">⏳ FROTA ('+fv.length+')</h3>'+
-    fv.map(v=>'<div class="card vi" onclick="startForPlate(\''+v.placa+'\')"><div class="vii pn">🚗</div><div style="flex:1"><div style="font-weight:800;color:var(--gold);font-family:var(--fm);letter-spacing:1px">'+v.placa+'</div><div style="font-size:13px;color:var(--txt2)">'+v.marca_modelo+'</div></div><span style="color:var(--blue-l);font-size:12px;font-weight:700">Vistoriar →</span></div>').join('')+
+    fv.map(v=>{
+      const criador = v.cadastrado_por ? v.cadastrado_por.charAt(0).toUpperCase() + v.cadastrado_por.slice(1) : '';
+      return '<div class="card vi" onclick="startForPlate(\''+v.placa+'\')"><div class="vii pn">🚗</div><div style="flex:1"><div style="font-weight:800;color:var(--gold);font-family:var(--fm);letter-spacing:1px">'+v.placa+'</div><div style="font-size:13px;color:var(--txt2)">'+v.marca_modelo+'</div>' + (criador ? '<div style="font-size:11px;color:var(--txt3);margin-top:2px">👤 Cadastrado por: '+criador+'</div>' : '') + '</div><span style="color:var(--blue-l);font-size:12px;font-weight:700">Vistoriar →</span></div>'
+    }).join('')+
     '</div>';
   }
 }
@@ -906,15 +1087,30 @@ function lookupPlate(p){
   if (cl.length < 7) return; 
 
   // ==========================================
-  // BLOQUEIO DE CHEGADA DUPLICADA
+  // BLOQUEIOS: CHEGADA DUPLICADA E CICLO FECHADO
   // ==========================================
   if (S.formType === 'v1') {
       const allInsp = DB.get('inspections') || [];
+      
+      // 1. NOVO: Bloqueia se o veículo já tiver um ciclo fechado (Saída realizada)
+      const closedCycle = allInsp.find(i =>
+          i.placa && i.placa.toLowerCase().replace(/[^a-z0-9]/g,'') === cl &&
+          i.status === 'retorno_completo'
+      );
+
+      if (closedCycle) {
+          toast('⚠️ Este veículo já concluiu o ciclo de vistoria (Chegada e Saída)!', 'err');
+          S.form.placa = ''; 
+          S.form.isNewVehicle = false; 
+          renderForm();
+          return; 
+      }
             
+      // 2. MANTÉM: Bloqueia se já tiver uma Chegada em aberto
       const openV1 = allInsp.find(i =>
           i.placa && i.placa.toLowerCase().replace(/[^a-z0-9]/g,'') === cl &&
           !i.cloned_from && 
-          !allInsp.some(v2 => v2.cloned_from === i.id) 
+          !allInsp.some(v2 => v2.cloned_from === i.id || (v2.placa === i.placa && v2.status === 'retorno_completo')) 
       );
       
       if (openV1 && openV1.id !== S.form.id) {
@@ -930,7 +1126,7 @@ function lookupPlate(p){
   const v=(DB.get('vehicles')||[]).find(x=>x.placa.toLowerCase().replace(/[^a-z0-9]/g,'')===cl);
   if(v){
     S.form.isNewVehicle = false;
-    Object.assign(S.form,{placa:v.placa,marca_modelo:v.marca_modelo,ano:v.ano,combustivel:v.combustivel,tipo:v.tipo});
+    Object.assign(S.form,{placa:v.placa,marca_modelo:v.marca_modelo,ano:v.ano,combustivel:v.combustivel,tipo:v.tipo, municipio:v.municipio}); // 
             
     if(v.condutor && !S.form.nome_condutor) S.form.nome_condutor = v.condutor;
     if(v.rota && !S.form.itinerario) S.form.itinerario = v.rota;
@@ -976,7 +1172,8 @@ function renderForm(){
            '<div class="fr"><div class="fg"><label class="fl-d">Ano</label><input class="fiw" type="number" id="f-nv-ano" value="'+(d.ano||'')+'"></div>'+
            '<div class="fg"><label class="fl-d">Combustível</label><select class="fiw" id="f-nv-comb"><option value="Flex" '+(d.combustivel==='Flex'?'selected':'')+'>Flex</option><option value="Gasolina" '+(d.combustivel==='Gasolina'?'selected':'')+'>Gasolina</option><option value="Etanol" '+(d.combustivel==='Etanol'?'selected':'')+'>Etanol</option><option value="Diesel" '+(d.combustivel==='Diesel'?'selected':'')+'>Diesel</option></select></div></div>'+
            '<div class="fr" style="margin-top:10px"><div class="fg"><label class="fl-d">Tipo</label><select class="fiw" id="f-nv-tipo"><option value="requisitado" '+(d.tipo==='requisitado'?'selected':'')+'>Requisitado</option><option value="alugado" '+(d.tipo==='alugado'?'selected':'')+'>Alugado</option></select></div>'+
-           '<div class="fg"><label class="fl-d">Órgão de Origem <span class="req">*</span></label><input class="fiw" id="f-nv-orgao" placeholder="Ex: Cartório da 26ª ZE" value="'+(d.orgao_origem||'')+'"></div></div>'+
+           '<div class="fg"><label class="fl-d">Município</label><select class="fiw" id="f-nv-mun"><option value="Ponte Alta do Tocantins" '+(d.municipio==='Ponte Alta do Tocantins'?'selected':'')+'>Ponte Alta do Tocantins</option><option value="Mateiros" '+(d.municipio==='Mateiros'?'selected':'')+'>Mateiros</option><option value="Pindorama" '+(d.municipio==='Pindorama'?'selected':'')+'>Pindorama</option></select></div></div>'+
+           '<div class="fg" style="margin-bottom:10px"><label class="fl-d">Órgão de Origem <span class="req">*</span></label><input class="fiw" id="f-nv-orgao" placeholder="Ex: Cartório da 26ª ZE" value="'+(d.orgao_origem||'')+'"></div>'+
            '</div>';
     } else if (d.marca_modelo && d.placa.length >= 7) {        
         h+='<div style="background:#f0fdf4;border:1px solid #bbf7d0;padding:12px;border-radius:8px;margin-bottom:16px;">'+
@@ -1139,6 +1336,7 @@ function syncForm(){
      if(g('f-nv-comb')!==undefined) d.combustivel=g('f-nv-comb');
      if(g('f-nv-tipo')!==undefined) d.tipo=g('f-nv-tipo'); 
      if(g('f-nv-orgao')!==undefined) d.orgao_origem=g('f-nv-orgao'); 
+     if(g('f-nv-mun')!==undefined) d.municipio=g('f-nv-mun');
   }
 }
 
@@ -1166,7 +1364,9 @@ async function nextSec(){
               ano: parseInt(S.form.ano) || new Date().getFullYear(),
               combustivel: S.form.combustivel,
               orgao_origem: S.form.orgao_origem, 
-              tipo: S.form.tipo || 'requisitado', 
+              tipo: S.form.tipo || 'requisitado',
+              cadastrado_por: S.profile.role, 
+              municipio: S.form.municipio,
               active: true
           });
           DB.set('vehicles', vehicles);
@@ -1183,7 +1383,9 @@ async function nextSec(){
                       condutor: S.form.nome_condutor,  
                       rota: S.form.itinerario,
                       combustivel: S.form.combustivel, 
-                      tipo: S.form.tipo || 'requisitado' 
+                      tipo: S.form.tipo || 'requisitado', 
+                      cadastrado_por: S.profile.role,
+                      municipio: S.form.municipio
                   })
               });
               if(!resV.ok) {
@@ -1273,7 +1475,7 @@ async function syncVistoriaAPI(){
       const res = await fetch(url, { method, headers: {'Content-Type': 'application/json'}, body: JSON.stringify(payload) });
       const data = await res.json();
       if(res.ok) {
-          if(!isV2) S.form.db_id = data.id_vistoria; // Guarda a ID gerada no banco!
+          if(!isV2) S.form.db_id = data.id_vistoria; 
           toast('Integrado com sucesso no MySQL!', 'ok');
       } else {
           toast('Erro na integração: ' + data.erro, 'err');
@@ -1291,12 +1493,17 @@ async function syncVistoriaAPI(){
 function viewInsp(id){
   const insp=DB.get('inspections')||[];
   const i=insp.find(x=>x.id===id);if(!i)return;
+  
+  // Busca o veículo para garantir que temos o município
+  const veicInfo = (DB.get('vehicles')||[]).find(x=>x.placa===i.placa);
+  const munInfo = i.municipio || (veicInfo ? veicInfo.municipio : '—');
+  
   const aeq=(DB.get('equipment')||[]).filter(e=>e.active);const ceq=aeq.filter(e=>i.equipment?.[e.key]);
   const mo=el('modal-ov');const mc=el('modal');
   mc.innerHTML='<div class="modal-h"><h3>VISTORIA — '+i.placa+'</h3><button class="modal-x" onclick="closeM()">×</button></div>'+
   '<div class="modal-b"><div class="pdf-pv" id="pdf-c">'+
   '<div class="pdf-hd"><div style="font-size:18px;font-weight:900;letter-spacing:2px">TERMO DE VISTORIA</div><div style="font-size:12px;margin-top:4px;opacity:.8">TRE-TO</div></div>'+
-  '<div class="pdf-bd"><div class="pdf-s"><h4>Dados de Identificação</h4><div class="pdf-g"><div class="lb">Placa:</div><div class="vl" style="font-weight:800;font-family:var(--fm)">'+i.placa+'</div><div class="lb">Condutor:</div><div class="vl">'+(i.nome_condutor||'—')+'</div><div class="lb">Itinerário:</div><div class="vl">'+(i.itinerario||'—')+'</div></div></div>'+
+  '<div class="pdf-bd"><div class="pdf-s"><h4>Dados de Identificação</h4><div class="pdf-g"><div class="lb">Placa:</div><div class="vl" style="font-weight:800;font-family:var(--fm)">'+i.placa+'</div><div class="lb">Condutor:</div><div class="vl">'+(i.nome_condutor||'—')+'</div><div class="lb">Itinerário:</div><div class="vl">'+(i.itinerario||'—')+'</div><div class="lb">Município:</div><div class="vl">'+munInfo+'</div></div></div>'+
   '<div class="pdf-s"><h4>Assinaturas Salvas Localmente</h4><div style="display:grid;grid-template-columns:1fr 1fr;gap:16px"><div style="text-align:center">'+(i.assinatura_motorista?'<img src="'+i.assinatura_motorista+'" style="width:100%;height:60px;object-fit:contain;border-bottom:1px solid #1e293b">':'')+'<div style="font-size:12px;font-weight:700;margin-top:4px">'+(i.nome_condutor||'Motorista')+'</div></div><div style="text-align:center">'+(i.assinatura_vistoriador?'<img src="'+i.assinatura_vistoriador+'" style="width:100%;height:60px;object-fit:contain;border-bottom:1px solid #1e293b">':'')+'<div style="font-size:12px;font-weight:700;margin-top:4px">'+(i.inspector_name||'Vistoriador')+'</div></div></div></div></div></div></div>'+
   '<div class="modal-f"><button class="btn btn-pri" onclick="dlPDF(\''+id+'\')" style="flex:1">📥 Baixar PDF Completo</button><button class="btn btn-out" onclick="closeM()" style="flex:1">Fechar</button></div>';
   mo.classList.add('show');
@@ -1314,7 +1521,7 @@ function dlPDF(id){
   let y = 15;
   
   const addH = (title) => {
-    doc.setFillColor(230, 230, 230); // Cinza claro
+    doc.setFillColor(230, 230, 230); 
     doc.rect(m, y, w - m*2, 6, 'F');
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(10);
@@ -1349,16 +1556,20 @@ function dlPDF(id){
   doc.text(i.inspector_name || '—', m + 28, y); y += 8;
 
   // 3. Dados de Identificação
+  const veicInfo = (DB.get('vehicles') || []).find(x => x.placa === i.placa);
+  const munInfo = i.municipio || (veicInfo ? veicInfo.municipio : '—');
+
   addH('DADOS DE IDENTIFICAÇÃO');
   addTxt('Placa:', i.placa, m, m + 12); 
   addTxt('Marca/Modelo:', i.marca_modelo, 80, 105); y += 6;
   
   addTxt('Ano:', i.ano, m, m + 10); 
   addTxt('Combustível:', i.combustivel, 80, 102); 
-  addTxt('Tipo:', i.tipo, 150, 160); y += 6;
+  addTxt('Tipo:', i.tipo, 140, 150); y += 6;
   
   addTxt('Condutor:', i.nome_condutor, m, m + 16); 
-  addTxt('Itinerário:', i.itinerario, 80, 97); y += 10;
+  addTxt('Itinerário:', i.itinerario, 80, 97); 
+  addTxt('Município:', munInfo, 140, 160); y += 10;
 
   // 4. Acessórios e Equipamentos (Grade)
   addH('ACESSÓRIOS E EQUIPAMENTOS');
@@ -1379,7 +1590,7 @@ function dlPDF(id){
      doc.text(`${valStr} ${eq.label}`, eqX, eqY);
      
      eqX += 45;
-     if(eqX > 180) { eqX = m; eqY += 6; } // Quebra a linha a cada 4 itens
+     if(eqX > 180) { eqX = m; eqY += 6; } 
   });
   y = eqY + (eqX === m ? 4 : 10);
 

@@ -59,6 +59,5 @@ def login():
 
 @auth_bp.route('/api/logout', methods=['POST'])
 def logout():
-    # Em APIs RESTful modernas, o logout real é feito no Front-end apagando os dados locais (localStorage).
-    # Esta rota serve para registrar a saída no back-end, se necessário futuramente.
+    
     return jsonify({"status": "sucesso", "mensagem": "Logout realizado com sucesso"}), 200
