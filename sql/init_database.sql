@@ -24,13 +24,16 @@ CREATE TABLE Veiculo (
     rota VARCHAR(100),
     orgao_origem VARCHAR(100),
     combustivel VARCHAR(30) DEFAULT 'Flex',
-    tipo VARCHAR(30) DEFAULT 'requisitado'
+    tipo VARCHAR(30) DEFAULT 'requisitado',
+    cadastrado_por VARCHAR(50),
+    municipio VARCHAR(100)
 );
 
 -- 3. Tabela de Equipamentos e Acessórios
 CREATE TABLE Equipamento (
     id_equipamento INT AUTO_INCREMENT PRIMARY KEY,
-    nome_equipamento VARCHAR(50) NOT NULL
+    nome_equipamento VARCHAR(50) NOT NULL,
+    obrigatorio BOOLEAN DEFAULT 1
 );
 
 -- 4. Tabela Principal de Transações (Vistorias)
@@ -80,8 +83,8 @@ INSERT INTO Usuario (id_usuario, nome, perfil, login, senha) VALUES
 (2, 'Marciel Gomes', 'Vistoriador', 'marciel.rodrigues@tre-to.jus.br', 'hash456');
 
 -- Inserindo Veículos
-INSERT INTO Veiculo (placa, marca, modelo, ano, condutor, rota, orgao_origem, combustivel, tipo) VALUES 
-('ABC1234', 'Renault', 'Sandero', 2026, 'Artur', 'Gato', 'Câmara', 'Gasolina', 'requisitado');
+INSERT INTO Veiculo (placa, marca, modelo, ano, condutor, rota, orgao_origem, combustivel, tipo, cadastrado_por, municipio) VALUES 
+('ABC1234', 'Renault', 'Sandero', 2026, 'Artur', 'Gato', 'Câmara', 'Gasolina', 'requisitado', 'gestor', 'Ponte Alta do Tocantins');
 
 -- Inserindo Equipamentos Padrão
 INSERT INTO Equipamento (id_equipamento, nome_equipamento) VALUES 
